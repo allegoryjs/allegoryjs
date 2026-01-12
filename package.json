@@ -1,0 +1,26 @@
+{
+  "name": "allegoryjs",
+  "version": "0.0.0-placeholder",
+  "description": "The AllegoryJS text-based game engine",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/allegoryjs/allegoryjs.git"
+  },
+  "keywords": [
+    "game",
+    "engine",
+    "storytelling"
+  ],
+  "author": "AllegoryJS",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/allegoryjs/allegoryjs/issues"
+  },
+  "homepage": "https://github.com/allegoryjs/allegoryjs#readme"
+}
