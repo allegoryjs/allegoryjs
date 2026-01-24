@@ -40,4 +40,14 @@ See [TDD.md](./docs/TDD.md) for a technical deep dive.
 
 We are currently building the foundation. If you are interested in the architecture of text engines, feel free to watch the repo or open a discussion.
 
+## A Note on AI
+
+AllegoryJS uses AI to empower the player, not to replace the author.
+
+- Understanding, Not Hallucinating: We use local AI models to parse user input (Natural Language Processing). This allows the player to type freely without guessing the exact verb syntax.
+
+- Human-Crafted Stories: The engine is designed for hand-written narratives and rigorous logic. The AI determines what the player wants to do, but the game logic determines what happens next.
+
+- Deterministic Simulation: Unlike LLM-generated games, AllegoryJS simulations are stable, debuggable, and handcrafted by the developer.
+
 *License: MIT*
