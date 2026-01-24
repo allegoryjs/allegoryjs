@@ -71,32 +71,33 @@ export default class ECS {
             )
     }
 
-    getEntitiesWithComponents(...componentTypes: ComponentName[]): Entity[] {
-        let componentWithFewestEntities: string = '';
+    getEntitiesByComponents(...componentTypes: ComponentName[]): Entity[] {
+        if (componentTypes.length === 0) return [];
 
-        for (const componentType in componentTypes) {
-            if (!componentWithFewestEntities) {
-                componentWithFewestEntities = componentType
-            }
+        const sortedTypes = componentTypes.sort((a, b) => {
+            return (this.#components.get(a)?.size ?? 0) - (this.#components.get(b)?.size ?? 0);
+        });
 
-            const numberOfEntitiesToCheck = this.#components.get(componentType)?.size ?? 0
-            const numberOfEntitiesFewest = this.#components.get(componentWithFewestEntities)?.size ?? 0
+        const [smallestType, ...rest] = sortedTypes;
+        const smallestStore = this.#components.get(smallestType);
 
-            if (numberOfEntitiesToCheck < numberOfEntitiesFewest) {
-                componentWithFewestEntities = componentType
-            }
+        if (!smallestStore || smallestStore.size === 0) return [];
+
+        const result: Entity[] = [];
+
+        for (const entity of smallestStore.keys()) {
+            const hasAll = rest.every(type => this.entityHasComponent(entity, type));
+            if (hasAll) result.push(entity);
         }
 
-        // eztodo resume here;
-        /*
-            The Fix: "Intersection of Smallest Set"
-            In ECS, the standard optimization is to find which requested component has the fewest entities, iterate that one, and check the others.
-            Query: [Location, Player, Wet]
-            Counts:
-            Location: 500 entities
-            Player: 1 entity
-            Wet: 5 entities
-            Strategy: Don't check 500 locations. Grab the 1 Player entity and check "Is it Wet? Has Location?". You just did 2 checks instead of 1500.
-        */
+        return result;
+    }
+
+    destroyEntity(entity: Entity) {
+        for (const store of this.#components.values()) {
+            store.delete(entity);
+        }
+
+        this.#activeEntities.delete(entity);
     }
 }
