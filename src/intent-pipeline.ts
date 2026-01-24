@@ -28,7 +28,7 @@ class Emitter {
 declare const emitter: Emitter
 
 export default class IntentPipeline extends Emitter {
-    
+
     async handleCommand(playerCommand: string) {
         const intents = await mlModule.convertCommandToIntents(playerCommand)
 
@@ -50,7 +50,6 @@ export default class IntentPipeline extends Emitter {
     }
 
     #auction (intent: Intent): Promise<void> {
-        this.#bidders
         return Promise.resolve();
     }
 }
