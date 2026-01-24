@@ -1,47 +1,102 @@
+type Entity = number
+type DataProperty = string
+type ComponentData = Record<DataProperty, unknown>
+type ComponentName = string
+type EntityComponents  = Map<Entity, ComponentData>
+type ComponentRegistry = Map<ComponentName, EntityComponents>;
+
 export default class ECS {
-    #nextEntityId= 1
+    #nextEntityId = 1
+    #activeEntities = new Set<number>()
 
-    #stores = new Map<string, Map<number, Record<string, unknown>>>()
+    #components = new Map<ComponentName, EntityComponents>() as ComponentRegistry
 
-    defineComponent(name: string) {
-        if (this.#stores.has(name)) {
+    get #entityCount() {
+        return this.#nextEntityId;
+    }
+
+    defineComponent(name: ComponentName) {
+        if (this.#components.has(name)) {
             throw new Error(`Component named ${name} already exists`)
         }
 
-        this.#stores.set(name, new Map());
+        this.#components.set(name, new Map())
 
-        return name;
+        return name
     }
+
     createEntity() {
-        return this.#nextEntityId++;
+        const id = this.#nextEntityId++
+
+        this.#activeEntities.add(id)
+
+        return id
     }
 
     addComponentToEntity(
-        entity: number,
-        componentType: string,
+        entity: Entity,
+        componentType: ComponentName,
         data: Record<string, unknown>
     ) {
-        const store = this.#stores.get(componentType);
+        const store = this.#components.get(componentType);
 
         if (!store) {
-            throw new Error(`Unknown component type: ${componentType}`);
+            throw new Error(`Unknown component type: ${componentType}`)
         }
 
-        store.set(entity, data);
+        store.set(entity, data)
     }
 
-    removeComponentFromEntity(entity: number, componentType: string) {
-        this.#stores.get(componentType)?.delete(entity);
+    removeComponentFromEntity(entity: Entity, componentType: ComponentName) {
+        this.#components.get(componentType)?.delete(entity)
     }
 
-    getComponentData(entity: number, componentType: string) {
-        const store = this.#stores.get(componentType);
+    getComponentData(entity: Entity, componentType: ComponentName) {
+        const store = this.#components.get(componentType)
 
-        return store?.get(entity);
+        return store?.get(entity)
     }
 
-    entityHasComponent(entity: number, componentType: string) {
-        const store = this.#stores.get(componentType);
-        return !!store?.has(entity);
+    entityHasComponent(entity: Entity, componentType: ComponentName) {
+        const component = this.#components.get(componentType)
+        return !!component?.has(entity)
+    }
+
+    getComponentsOnEntity(entity: Entity): ComponentName[] {
+        return Array.from(this.#components)
+            .flatMap(([componentName]) =>
+                this.entityHasComponent(entity, componentName)
+                    ? [componentName]
+                    : []
+            )
+    }
+
+    getEntitiesWithComponents(...componentTypes: ComponentName[]): Entity[] {
+        let componentWithFewestEntities: string = '';
+
+        for (const componentType in componentTypes) {
+            if (!componentWithFewestEntities) {
+                componentWithFewestEntities = componentType
+            }
+
+            const numberOfEntitiesToCheck = this.#components.get(componentType)?.size ?? 0
+            const numberOfEntitiesFewest = this.#components.get(componentWithFewestEntities)?.size ?? 0
+
+            if (numberOfEntitiesToCheck < numberOfEntitiesFewest) {
+                componentWithFewestEntities = componentType
+            }
+        }
+
+        // eztodo resume here;
+        /*
+            The Fix: "Intersection of Smallest Set"
+            In ECS, the standard optimization is to find which requested component has the fewest entities, iterate that one, and check the others.
+            Query: [Location, Player, Wet]
+            Counts:
+            Location: 500 entities
+            Player: 1 entity
+            Wet: 5 entities
+            Strategy: Don't check 500 locations. Grab the 1 Player entity and check "Is it Wet? Has Location?". You just did 2 checks instead of 1500.
+        */
     }
 }
