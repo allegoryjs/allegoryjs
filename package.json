@@ -13,9 +13,8 @@
     "url": "git+ssh://git@github.com/allegoryjs/allegoryjs.git"
   },
   "keywords": [
-    "game",
-    "engine",
-    "storytelling"
+    "game engine",
+    "interactive fiction"
   ],
   "author": "AllegoryJS",
   "license": "MIT",
