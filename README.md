@@ -50,4 +50,6 @@ AllegoryJS uses AI to empower the player, not to replace the author.
 
 - Deterministic Simulation: Unlike LLM-generated games, AllegoryJS simulations are stable, debuggable, and handcrafted by the developer.
 
+- Local Models First: The ML pipeline is run entirely inside of the player's browser; this allows for fully offline play, and is significantly faster and less wasteful than having the client rely on talking to a big LLM over the wire.
+
 *License: MIT*
