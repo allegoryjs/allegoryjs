@@ -9,7 +9,7 @@
 > **Status: Pre-Alpha / Heavy Development**
 > *This repository is currently a construction zone. Architecture is being defined, and the kernel is being built.*
 
-**AllegoryJS** is a modern, web-native engine for simulation-based Interactive Fiction.
+**Allegory.js** is a modern, web-native engine for simulation-based Interactive Fiction.
 
 It aims to bridge the gap between traditional parser games (Inform 7, TADS) and systemic game design, bringing deep world simulation to the JavaScript ecosystem.
 
