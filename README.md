@@ -1,4 +1,4 @@
-# AllegoryJS
+# Allegory.js
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./images/allegory_logo_horizontal_light.png">
