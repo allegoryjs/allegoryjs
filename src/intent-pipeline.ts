@@ -41,11 +41,11 @@ export default class IntentPipeline extends Emitter {
             return
         }
 
-        let i = 0;
+        let i = 0
 
         while (i < intents.length) {
-            await this.#auction(intents[i]);
-            i++;
+            await this.#auction(intents[i])
+            i++
         }
     }
 

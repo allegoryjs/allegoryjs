@@ -1,5 +1,11 @@
 # AllegoryJS
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./images/allegory_logo_horizontal_light.png">
+  <source media="(prefers-color-scheme: light)" srcset="./images/allegory_logo_horizontal.png">
+  <img alt="AllegoryJS logo" src="./images/allegory_logo_horizontal.png">
+</picture>
+
 > **Status: Pre-Alpha / Heavy Development**
 > *This repository is currently a construction zone. Architecture is being defined, and the kernel is being built.*
 
