@@ -1,5 +1,6 @@
+import type ECS from './ecs'
 import type { Entity } from './ecs'
-import Emitter, { defaultEmitStreams } from './emitter'
+import Emitter, { defaultEmitStreams, type EngineEvent } from './emitter'
 import type LocalizationModule from './localization'
 
 enum LawLayer {
@@ -8,11 +9,11 @@ enum LawLayer {
      *********************/
     // built-in laws, which typically handle basic functions (like saving) or
     // indicating that the engine does not understand a command,
-    // and which are easily overwritten
+    // and which are easily overwritten. Typically returns a COMPLETED in the contribution
     Core = 0,
 
     // laws packaged with the engine that the dev may choose to use;
-    // readily relinquish control of Intents
+    // readily relinquish control of Intents. Often returns a COMPLETED in the contribution
     // e.g., "Take command moves item to inventory"
     StdLib = 1,
 
@@ -31,9 +32,18 @@ enum LawLayer {
     Instance = 3
 }
 
-interface IntentPipelineConfig {
-    confidenceThreshold: 0.7,
+enum ContributionStatus {
+    pass = 'PASS',
+    rejected = 'REJECTED',
+    completed = 'COMPLETED'
+}
 
+interface IntentPipelineConfig {
+    confidenceThreshold: 0.7
+    biddingIdMatchPrice: 100
+    biddingComponentMatchPrice: 10
+    biddingPropsMatchPrice: 20
+    biddingTagsMatchPrice: 2
 }
 
 interface Intent {
@@ -49,7 +59,7 @@ interface IntentClassificationResponse {
     dryRun: boolean
 }
 
-interface MatchReport {
+interface SpecificityReport {
     layer: LawLayer;
 
     // The raw counts of what was matched
@@ -62,10 +72,52 @@ interface MatchReport {
     }
 }
 
+interface LawContext {
+    actor?: Entity
+    target?: Entity
+    ecsUtils: {
+        entityHasTag: () => {}
+        entityHasComponent: () => {}
+        getEntitiesByComponents: () => {}
+        getComponentsOnEntity: () => {}
+        getEntityComponentData: () => {}
+    }
+}
+
+type MutationOp =
+    | { op: 'UPDATE',  entity: number, component: string, value: object } // Merges data
+    | { op: 'SET',     entity: number, component: string, value: object } // Replaces data completely
+    | { op: 'ADD',     entity: number, component: string, value: object }
+    | { op: 'REMOVE',  entity: number, component: string }
+    | { op: 'DESTROY', entity: number };
+
+interface Contribution {
+    status: ContributionStatus
+    mutations?: Array<MutationOp>
+    narrations?: Array<string>
+    events?: Array<EngineEvent>
+}
+
+interface LawConcern {
+    components?: Array<string>
+    props?: Array<{
+        prop: string // strings must be in the format of ComponentName.propName or they are ignored
+        value: string | number | boolean // the value that counts as a match
+    }>
+    tags?: Array<string>
+    ids?: Array<string>
+}
+
+interface LawMatcher {
+    actor?: LawConcern
+    target?: LawConcern
+}
+
 interface Law {
     name: string
-    filter: (intent: Intent) => boolean // whether the Law cares about this kind of Intent
-    getSpecificity: (intent: Intent) => MatchReport
+    intents: Array<string> // an array of the intent names that the Law cares about
+    matchers: Array<LawMatcher> // the scenarios that the Law cares about
+    apply: (ctx: LawContext) => Contribution
 }
 
 interface IntentClassificationModule {
@@ -78,17 +130,26 @@ export default class IntentPipeline {
     #config: IntentPipelineConfig
     #intentClassificationModule: IntentClassificationModule
     #t: (slug: string) => string
+    #laws: Map<string, Law>
+    #ecs: ECS
 
     constructor(
         emitter: Emitter,
+        ecs: ECS,
         intentClassificationModule: IntentClassificationModule,
         localizationModule: LocalizationModule,
         config: IntentPipelineConfig
     ) {
         this.#emitter = emitter
+        this.#ecs = ecs
         this.#config = config
         this.#t = localizationModule.$t
         this.#intentClassificationModule = intentClassificationModule
+        this.#laws = new Map()
+    }
+
+    get #lawList() {
+        return Array.from(this.#laws).map(([, law]) => law)
     }
 
     async #handleUnknownCommand() {
@@ -97,16 +158,52 @@ export default class IntentPipeline {
         ])
     }
 
-    #auction (intent: Intent): Promise<void> {
-        return Promise.resolve();
+    async #auctionIntent(intent: Intent): Array<Contribution> {
+        const specificityCache = new Map<string, SpecificityReport>()
+        const bidCache = new Map<string, number>()
+
+        const sortedLaws = this.#lawList.toSorted((lawA, lawB) => {
+            if (!specificityCache.has(lawA.name)) {
+                specificityCache.set(lawA.name, lawA.getSpecificityReport(intent))
+            }
+
+            if (!specificityCache.has(lawB.name)) {
+                specificityCache.set(lawB.name, lawB.getSpecificityReport(intent))
+            }
+
+            const lawALayer = specificityCache.get(lawA.name)!.layer
+            const lawBLayer = specificityCache.get(lawB.name)!.layer
+
+            if (lawALayer !== lawBLayer) {
+                return  lawBLayer - lawALayer
+            }
+
+            let lawABid: number
+            let lawBBid: number
+
+            if (!bidCache.has(lawA.name)) {
+                lawABid = this.calculateBid(specificityCache.get(lawA.name)!, intent)
+            }
+        })
+    }
+
+    calculateBid(specificityReport: SpecificityReport, intent: Intent): number {
+        /*
+            ids: number;        // How many exact entity IDs matched?
+            components: number; // How many components were checked for presence?
+            props: number;      // How many component property values matched?
+            tags: number;       // How many tags were checked?
+        */
+
+        const idMatches = this.#ecs.
     }
 
     ratifyLaw(newLaw: Law) {
-
+        this.#laws.set(newLaw.name, newLaw)
     }
 
     revokeLaw(name: string) {
-
+        this.#laws.delete(name)
     }
 
     async handleCommand(playerCommand: string) {
@@ -128,6 +225,8 @@ export default class IntentPipeline {
             return;
         }
 
+        let isDryRun = false
+
         for (let index = 0; index < intentResponses.length; index++) {
             const intentResponse = intentResponses[index];
 
@@ -137,7 +236,14 @@ export default class IntentPipeline {
                 return;
             }
 
-            const { intent } = intentResponse;
+            const { intent, dryRun } = intentResponse;
+
+            if (dryRun) {
+                isDryRun = true
+            }
+
+            this.#auctionIntent(intent)
+
 
         }
     }

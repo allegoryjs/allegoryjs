@@ -1,3 +1,5 @@
+import deepFreeze from './utilities/deepFreeze';
+
 export type Entity = number
 
 interface EngineComponentSchema {
@@ -61,12 +63,14 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
         this.#components.get(componentType)?.delete(entity)
     }
 
-    getComponentData<ComponentName extends keyof ComponentSchema>(
-        entity: number,
+    getEntityComponentData<ComponentName extends keyof ComponentSchema>(
+        entity: Entity,
         name: ComponentName,
-    ): ComponentSchema[ComponentName] | undefined {
+    ): Readonly<ComponentSchema[ComponentName]> | undefined {
         const store = this.#components.get(name);
-        return store?.get(entity) as ComponentSchema[ComponentName] | undefined;
+        return store?.get(entity)
+            ? deepFreeze(store.get(entity) as ComponentSchema[ComponentName])
+            : undefined;
     }
 
     entityHasComponent<ComponentName extends keyof ComponentSchema>(
@@ -124,14 +128,24 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
         this.#activeEntities.delete(entity);
     }
 
-    addTag(entity: Entity, tag: string) {
-        const tagData = this.getComponentData(entity, 'Tags');
+    addTagToEntity(entity: Entity, tag: string) {
+        const tagData = this.getEntityComponentData(entity, 'Tags');
 
         tagData!.list.add(tag);
     }
 
-    hasTag(entity: Entity, tag: string) {
-        const tagData = this.getComponentData(entity, 'Tags');
+    entityHasTag(entity: Entity, tag: string) {
+        const tagData = this.getEntityComponentData(entity, 'Tags');
         return tagData?.list.has(tag) ?? false;
+    }
+
+    getReadonlyFacade() {
+        return {
+            entityHasTag: this.entityHasTag,
+            entityHasComponent: this.entityHasComponent,
+            getEntitiesByComponents: this.getEntitiesByComponents,
+            getComponentsOnEntity: this.getComponentsOnEntity,
+            getEntityComponentData: this.getEntityComponentData,
+        }
     }
 }
