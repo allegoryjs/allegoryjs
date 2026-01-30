@@ -72,13 +72,8 @@ interface IntentClassificationResponse {
 interface LawContext {
     actor?: Entity
     target?: Entity
-    ecsUtils: {
-        entityHasTag: () => {}
-        entityHasComponent: () => {}
-        getEntitiesByComponents: () => {}
-        getComponentsOnEntity: () => {}
-        getEntityComponentData: () => {}
-    }
+    auxiliary?: Entity[]
+    ecsUtils: ReturnType<InstanceType<typeof ECS>["getReadonlyFacade"]>
 }
 
 type MutationOp =
@@ -116,7 +111,7 @@ interface Law<ComponentSchema extends EngineComponentSchema> {
     name: string
     intents: Array<string> // an array of the intent names that the Law cares about
     matchers: Array<LawMatcher<ComponentSchema>> // the scenarios that the Law cares about
-    apply: (ctx: LawContext) => Contribution
+    apply: (ctx: LawContext) => Promise<Contribution>
 }
 
 interface IntentClassificationModule {
@@ -159,6 +154,90 @@ export default class IntentPipeline<
         ])
     }
 
+    #calculateConcernSpecificity(
+        entity: Entity,
+        concern: LawConcern<ComponentSchema>,
+    ) {
+        const idScore = concern?.ids?.reduce((acc, id) => {
+            return this.#ecs.getEntityByPrettyId(id) === entity ?
+                acc + this.#config.biddingIdMatchPrice :
+                acc
+        }, 0) ?? 0
+
+        if (concern.ids && idScore === 0) {
+            return -1
+        }
+
+        const componentScore = concern?.components?.reduce((acc, component) => {
+                const entityHasComponent = this.#ecs.entityHasComponent(entity, component)
+                if (entityHasComponent) {
+                    return acc + this.#config.biddingComponentMatchPrice
+                }
+
+                return acc
+        }, 0) ?? 0
+
+        if (concern?.components?.length && componentScore === 0) {
+            return -1
+        }
+
+        const propsScore = concern?.props?.reduce((acc, {
+            prop,
+            value
+        }) => {
+            const [componentName = '', property = ''] = prop.split('.')
+
+            if (![componentName, property].every(str => !!str)) {
+                console.warn('Invalid property matcher. Property matchers must be in the format of "ComponentName.propName"')
+                return acc
+            }
+
+            let actorHasComponent = false
+
+            if (this.#ecs.isComponent(componentName)) {
+                actorHasComponent = this.#ecs.entityHasComponent(
+                    entity,
+                    componentName
+                )
+            } else {
+                console.warn(`Property matchers must be valid components (received ${componentName})`)
+                return acc
+            }
+
+            const componentData = this.#ecs.getEntityComponentData(entity, componentName)
+
+            if (
+                !componentData ||
+                !(property in componentData) ||
+                componentData[property as keyof typeof componentData] !== value
+            ) {
+                return acc
+            }
+
+            return acc + this.#config.biddingPropsMatchPrice
+        }, 0) ?? 0
+
+        if (concern?.props?.length && propsScore === 0) {
+            return -1
+        }
+
+        const tagsScore = concern?.tags?.reduce((acc, tag) => {
+            if (this.#ecs.entityHasTag(entity, tag)) {
+                return acc + this.#config.biddingTagsMatchPrice
+            }
+            return acc
+        }, 0) ?? 0
+
+        if (concern?.tags?.length && tagsScore === 0) {
+            return -1
+        }
+
+        return componentScore +
+            propsScore +
+            tagsScore +
+            idScore
+    }
+
     // returns the specificity of the highest scoring matched scenario
     #calculateSpecificity(law: Law<ComponentSchema>, intent: Intent): number {
         const {
@@ -169,7 +248,7 @@ export default class IntentPipeline<
         } = intent
 
         if (!law.intents.includes(name)) {
-            return 0
+            return -1
         }
 
         let highestScore = 0
@@ -179,64 +258,40 @@ export default class IntentPipeline<
             target: targetConcern,
             auxiliary: auxConcerns
         }) => {
-            const actorComponentScore = actor ? actorConcern?.components?.reduce((acc, component) => {
-                const entityHasComponent = this.#ecs.entityHasComponent(actor, component)
-                if (entityHasComponent) {
-                    return acc + this.#config.biddingComponentMatchPrice
-                }
-
-                return acc
-            }, 0) ?? 0 : 0
-
-            const actorPropsScore = actor ? actorConcern?.props?.reduce((acc, {
-                prop,
-                value
-            }) => {
-                const [componentName = '', property = ''] = prop.split('.')
-
-                if (![componentName, property].every(str => !!str)) {
-                    throw new Error('Invalid property matcher. Property matchers must be in the format of "ComponentName.propName"')
-                }
-
-                let actorHasComponent = false
-
-                if (this.#ecs.isComponent(componentName)) {
-                    actorHasComponent = this.#ecs.entityHasComponent(
-                        actor,
-                        componentName
-                    )
-                } else {
-                    console.warn(`Property matchers must be valid components (received ${componentName})`);
-                }
-
-                if (!actorHasComponent) {
+            const actorScore = actor && actorConcern ? this.#calculateConcernSpecificity(actor, actorConcern) : 0
+            const targetScore = target && targetConcern ? this.#calculateConcernSpecificity(target, targetConcern) : 0
+            const auxiliaryScore = auxConcerns ? (auxiliary?.reduce((acc, auxEntity, index) => {
+                if (!auxConcerns[index]) {
                     return acc
                 }
+                // eztodo this assumes aux entities are ordered the same as aux concerns. this is an issue
+                return acc + this.#calculateConcernSpecificity(auxEntity, auxConcerns[index])
+            }, 0) ?? 0) : 0
 
-                const componentData = this.#ecs.getEntityComponentData(actor, componentName)
+            if ([actorScore, targetScore, auxiliaryScore].some(score => score < 0)) {
+                return
+            }
 
-                if (!componentData || componentData[property] !== value) {
-                    return acc
-                }
-                // eztodo pick up here
+            const totalScore = actorScore + targetScore + auxiliaryScore
 
-                return acc + this.#config.biddingPropsMatchPrice
-            }, 0) ?? 0 : 0
-            const actorTagsScore
-            const actorIdScore
-
-
+            if (totalScore > highestScore) {
+                highestScore = totalScore
+            }
         })
+
+        return highestScore
     }
 
-    async #auctionIntent(intent: Intent): Array<Contribution> {
+    async #auctionIntent(intent: Intent): Promise<Array<Contribution>> {
         // sort laws by specificity score
         // one by one, invoke law.apply
         //     if the status of the contribution is PASS, continue iterating
         //     if the status is COMPLETED, stop iteration and return contribution stack
         //     if the status is REJECTED, stop iteration and return an empty array
 
-        const sortedLaws = this.#lawList.toSorted((lawA, lawB) => {
+        const specificityCache = new Map<Law<ComponentSchema>, number>()
+
+        const sortedLaws = this.#lawList.filter(law => law.intents.includes(intent.name)).toSorted((lawA, lawB) => {
             const layerA = lawA.layer;
             const layerB = lawB.layer;
 
@@ -246,8 +301,16 @@ export default class IntentPipeline<
                 return 1
             }
 
-            const lawASpecificity = this.#calculateSpecificity(lawA, intent)
-            const lawBSpecificity = this.#calculateSpecificity(lawB, intent)
+            if (!specificityCache.has(lawA)) {
+                specificityCache.set(lawA, this.#calculateSpecificity(lawA, intent))
+            }
+
+            if (!specificityCache.has(lawB)) {
+                specificityCache.set(lawB, this.#calculateSpecificity(lawB, intent))
+            }
+
+            const lawASpecificity = specificityCache.get(lawA) ?? 0
+            const lawBSpecificity = specificityCache.get(lawB) ?? 0
 
             if (lawASpecificity > lawBSpecificity) {
                 return -1
@@ -258,10 +321,34 @@ export default class IntentPipeline<
             }
 
             return 0
-        })
+        }).filter(law => specificityCache.get(law) !== -1)
+
+        const contributions: Array<Contribution> = []
+        const lawCtx: LawContext = {
+            actor: intent.actor,
+            target: intent.target,
+            auxiliary: intent.auxiliary, // eztodo will i need to store specific relationships between aux entities, or just assume they are all stated like "open the vent with the crowbar and the screwdriver"
+            ecsUtils: this.#ecs.getReadonlyFacade()
+        }
+
+        for (const law of sortedLaws) {
+            const result = await law.apply(lawCtx)
+
+            if (result.status === ContributionStatus.rejected) {
+                return []
+            }
+
+            contributions.push(result)
+
+            if (result.status === ContributionStatus.completed) {
+                break
+            }
+        }
+
+        return contributions
     }
 
-    ratifyLaw(newLaw: Law) {
+    ratifyLaw(newLaw: Law<ComponentSchema>) {
         this.#laws.set(newLaw.name, newLaw)
     }
 

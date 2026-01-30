@@ -3,8 +3,18 @@ import deepFreeze from './utilities/deepFreeze';
 export type Entity = number
 
 export interface EngineComponentSchema {
-    Tags: { list: Set<string> };
-    Meta: { name: string; created: number };
+    Tags: {
+        list: Set<string>
+    }
+
+    Meta: {
+        name: string
+        created: number
+
+        // pretty ID set by the developer; not to be confused
+        // with the entity ID, which is an integer
+        id: string
+    }
 }
 
 export default class ECS<ComponentSchema extends EngineComponentSchema = EngineComponentSchema> {
@@ -14,6 +24,7 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
         keyof ComponentSchema,
         Map<Entity, ComponentSchema[keyof ComponentSchema]>
     >()
+    #prettyIdMap = new Map<string, Entity>()
 
     constructor() {
         // Bootstrap the required system components
@@ -35,13 +46,24 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
         return name
     }
 
-    createEntity() {
+    createEntity(metaId?: string) {
+        if (metaId && this.#prettyIdMap.has(metaId)) {
+            throw new Error(`Cannot register new entity with pretty ID ${metaId}; entity ${this.#prettyIdMap.get(metaId)} already is already assigned that ID`)
+        }
         const id = this.#nextEntityId++
 
         this.#activeEntities.add(id)
 
         this.addComponentToEntity(id, 'Tags', { list: new Set<string>() })
-        this.addComponentToEntity(id, 'Meta', { name: `Entity_${id}`, created: Date.now() })
+        this.addComponentToEntity(
+            id,
+            'Meta',
+            {
+                name: `Entity_${id}`,
+                id: metaId || `entity_${id}`,
+                created: Date.now()
+            }
+        )
 
         return id
     }
@@ -144,6 +166,10 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
     entityHasTag(entity: Entity, tag: string) {
         const tagData = this.getEntityComponentData(entity, 'Tags');
         return tagData?.list.has(tag) ?? false;
+    }
+
+    getEntityByPrettyId(id: string) {
+        return this.#prettyIdMap.get(id)
     }
 
     getReadonlyFacade() {
