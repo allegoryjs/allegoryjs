@@ -2,7 +2,7 @@ import deepFreeze from './utilities/deepFreeze';
 
 export type Entity = number
 
-interface EngineComponentSchema {
+export interface EngineComponentSchema {
     Tags: { list: Set<string> };
     Meta: { name: string; created: number };
 }
@@ -19,6 +19,10 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
         // Bootstrap the required system components
         this.#components.set('Tags', new Map());
         this.#components.set('Meta', new Map());
+    }
+
+    isComponent(name: string): name is keyof ComponentSchema & string {
+        return (Array.from(this.#components.keys()) as string[]).includes(name)
     }
 
     defineComponent<ComponentName extends keyof ComponentSchema>(name: ComponentName) {
@@ -129,9 +133,12 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
     }
 
     addTagToEntity(entity: Entity, tag: string) {
-        const tagData = this.getEntityComponentData(entity, 'Tags');
+        const store = this.#components.get('Tags');
+        const tagData = store?.get(entity) as EngineComponentSchema['Tags'];
 
-        tagData!.list.add(tag);
+        if (tagData) {
+            tagData.list.add(tag);
+        }
     }
 
     entityHasTag(entity: Entity, tag: string) {
@@ -141,11 +148,11 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
 
     getReadonlyFacade() {
         return {
-            entityHasTag: this.entityHasTag,
-            entityHasComponent: this.entityHasComponent,
-            getEntitiesByComponents: this.getEntitiesByComponents,
-            getComponentsOnEntity: this.getComponentsOnEntity,
-            getEntityComponentData: this.getEntityComponentData,
+            entityHasTag: this.entityHasTag.bind(this),
+            entityHasComponent: this.entityHasComponent.bind(this),
+            getEntitiesByComponents: this.getEntitiesByComponents.bind(this),
+            getComponentsOnEntity: this.getComponentsOnEntity.bind(this),
+            getEntityComponentData: this.getEntityComponentData.bind(this),
         }
     }
 }

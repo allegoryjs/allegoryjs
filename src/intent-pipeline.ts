@@ -1,5 +1,5 @@
 import type ECS from './ecs'
-import type { Entity } from './ecs'
+import type { EngineComponentSchema, Entity } from './ecs'
 import Emitter, { defaultEmitStreams, type EngineEvent } from './emitter'
 import type LocalizationModule from './localization'
 
@@ -33,8 +33,14 @@ enum LawLayer {
 }
 
 enum ContributionStatus {
+    // a law added some flavor and/or added some proposed mutations, but
+    // isn't considering itself the final word; the Intent continues to propagate
     pass = 'PASS',
+
+    // the Intent is determined to be impossible; roll back any queued changes and abort
     rejected = 'REJECTED',
+
+    // the Intent has been fully handled; commit queued changes and stop propagation
     completed = 'COMPLETED'
 }
 
@@ -43,13 +49,16 @@ interface IntentPipelineConfig {
     biddingIdMatchPrice: 100
     biddingComponentMatchPrice: 10
     biddingPropsMatchPrice: 20
-    biddingTagsMatchPrice: 2
+    biddingTagsMatchPrice: 2.5
 }
 
 interface Intent {
     name: string
-    actor: Entity
-    target: Entity
+    actor?: Entity
+    target?: Entity
+
+    // any tools or implements or other related entities
+    auxiliary?: Array<Entity>
 }
 
 interface IntentClassificationResponse {
@@ -59,18 +68,6 @@ interface IntentClassificationResponse {
     dryRun: boolean
 }
 
-interface SpecificityReport {
-    layer: LawLayer;
-
-    // The raw counts of what was matched
-    // these figures combine the matches from both target and actor
-    constraints: {
-        ids: number;        // How many exact entity IDs matched?
-        components: number; // How many components were checked for presence?
-        props: number;      // How many component property values matched?
-        tags: number;       // How many tags were checked?
-    }
-}
 
 interface LawContext {
     actor?: Entity
@@ -89,7 +86,7 @@ type MutationOp =
     | { op: 'SET',     entity: number, component: string, value: object } // Replaces data completely
     | { op: 'ADD',     entity: number, component: string, value: object }
     | { op: 'REMOVE',  entity: number, component: string }
-    | { op: 'DESTROY', entity: number };
+    | { op: 'DESTROY', entity: number }
 
 interface Contribution {
     status: ContributionStatus
@@ -98,8 +95,8 @@ interface Contribution {
     events?: Array<EngineEvent>
 }
 
-interface LawConcern {
-    components?: Array<string>
+interface LawConcern<ComponentSchema extends EngineComponentSchema> {
+    components?: Array<keyof ComponentSchema>
     props?: Array<{
         prop: string // strings must be in the format of ComponentName.propName or they are ignored
         value: string | number | boolean // the value that counts as a match
@@ -108,34 +105,38 @@ interface LawConcern {
     ids?: Array<string>
 }
 
-interface LawMatcher {
-    actor?: LawConcern
-    target?: LawConcern
+interface LawMatcher<ComponentSchema extends EngineComponentSchema> {
+    actor?: LawConcern<ComponentSchema>
+    target?: LawConcern<ComponentSchema>
+    auxiliary?: Array<LawConcern<ComponentSchema>>
 }
 
-interface Law {
+interface Law<ComponentSchema extends EngineComponentSchema> {
+    layer: LawLayer
     name: string
     intents: Array<string> // an array of the intent names that the Law cares about
-    matchers: Array<LawMatcher> // the scenarios that the Law cares about
+    matchers: Array<LawMatcher<ComponentSchema>> // the scenarios that the Law cares about
     apply: (ctx: LawContext) => Contribution
 }
 
 interface IntentClassificationModule {
-    convertCommandToIntents: (command: string) => Promise<Array<IntentClassificationResponse>>
+    getIntentFromCommand: (command: string) => Promise<Array<IntentClassificationResponse>>
 }
 
 
-export default class IntentPipeline {
+export default class IntentPipeline<
+    ComponentSchema extends EngineComponentSchema = EngineComponentSchema
+> {
     #emitter: Emitter
     #config: IntentPipelineConfig
     #intentClassificationModule: IntentClassificationModule
     #t: (slug: string) => string
-    #laws: Map<string, Law>
-    #ecs: ECS
+    #laws: Map<string, Law<ComponentSchema>>
+    #ecs: ECS<ComponentSchema>
 
     constructor(
         emitter: Emitter,
-        ecs: ECS,
+        ecs: ECS<ComponentSchema>,
         intentClassificationModule: IntentClassificationModule,
         localizationModule: LocalizationModule,
         config: IntentPipelineConfig
@@ -158,44 +159,106 @@ export default class IntentPipeline {
         ])
     }
 
-    async #auctionIntent(intent: Intent): Array<Contribution> {
-        const specificityCache = new Map<string, SpecificityReport>()
-        const bidCache = new Map<string, number>()
+    // returns the specificity of the highest scoring matched scenario
+    #calculateSpecificity(law: Law<ComponentSchema>, intent: Intent): number {
+        const {
+            name,
+            actor,
+            target,
+            auxiliary
+        } = intent
 
-        const sortedLaws = this.#lawList.toSorted((lawA, lawB) => {
-            if (!specificityCache.has(lawA.name)) {
-                specificityCache.set(lawA.name, lawA.getSpecificityReport(intent))
-            }
+        if (!law.intents.includes(name)) {
+            return 0
+        }
 
-            if (!specificityCache.has(lawB.name)) {
-                specificityCache.set(lawB.name, lawB.getSpecificityReport(intent))
-            }
+        let highestScore = 0
 
-            const lawALayer = specificityCache.get(lawA.name)!.layer
-            const lawBLayer = specificityCache.get(lawB.name)!.layer
+        law.matchers.forEach(({
+            actor: actorConcern,
+            target: targetConcern,
+            auxiliary: auxConcerns
+        }) => {
+            const actorComponentScore = actor ? actorConcern?.components?.reduce((acc, component) => {
+                const entityHasComponent = this.#ecs.entityHasComponent(actor, component)
+                if (entityHasComponent) {
+                    return acc + this.#config.biddingComponentMatchPrice
+                }
 
-            if (lawALayer !== lawBLayer) {
-                return  lawBLayer - lawALayer
-            }
+                return acc
+            }, 0) ?? 0 : 0
 
-            let lawABid: number
-            let lawBBid: number
+            const actorPropsScore = actor ? actorConcern?.props?.reduce((acc, {
+                prop,
+                value
+            }) => {
+                const [componentName = '', property = ''] = prop.split('.')
 
-            if (!bidCache.has(lawA.name)) {
-                lawABid = this.calculateBid(specificityCache.get(lawA.name)!, intent)
-            }
+                if (![componentName, property].every(str => !!str)) {
+                    throw new Error('Invalid property matcher. Property matchers must be in the format of "ComponentName.propName"')
+                }
+
+                let actorHasComponent = false
+
+                if (this.#ecs.isComponent(componentName)) {
+                    actorHasComponent = this.#ecs.entityHasComponent(
+                        actor,
+                        componentName
+                    )
+                } else {
+                    console.warn(`Property matchers must be valid components (received ${componentName})`);
+                }
+
+                if (!actorHasComponent) {
+                    return acc
+                }
+
+                const componentData = this.#ecs.getEntityComponentData(actor, componentName)
+
+                if (!componentData || componentData[property] !== value) {
+                    return acc
+                }
+                // eztodo pick up here
+
+                return acc + this.#config.biddingPropsMatchPrice
+            }, 0) ?? 0 : 0
+            const actorTagsScore
+            const actorIdScore
+
+
         })
     }
 
-    calculateBid(specificityReport: SpecificityReport, intent: Intent): number {
-        /*
-            ids: number;        // How many exact entity IDs matched?
-            components: number; // How many components were checked for presence?
-            props: number;      // How many component property values matched?
-            tags: number;       // How many tags were checked?
-        */
+    async #auctionIntent(intent: Intent): Array<Contribution> {
+        // sort laws by specificity score
+        // one by one, invoke law.apply
+        //     if the status of the contribution is PASS, continue iterating
+        //     if the status is COMPLETED, stop iteration and return contribution stack
+        //     if the status is REJECTED, stop iteration and return an empty array
 
-        const idMatches = this.#ecs.
+        const sortedLaws = this.#lawList.toSorted((lawA, lawB) => {
+            const layerA = lawA.layer;
+            const layerB = lawB.layer;
+
+            if (layerA > layerB) {
+                return -1
+            } if (layerB > layerA) {
+                return 1
+            }
+
+            const lawASpecificity = this.#calculateSpecificity(lawA, intent)
+            const lawBSpecificity = this.#calculateSpecificity(lawB, intent)
+
+            if (lawASpecificity > lawBSpecificity) {
+                return -1
+            }
+
+            if (lawBSpecificity > lawASpecificity) {
+                return 1
+            }
+
+            return 0
+        })
     }
 
     ratifyLaw(newLaw: Law) {
@@ -207,7 +270,7 @@ export default class IntentPipeline {
     }
 
     async handleCommand(playerCommand: string) {
-        const intentResponses = await this.#intentClassificationModule.convertCommandToIntents(playerCommand)
+        const intentResponses = await this.#intentClassificationModule.getIntentFromCommand(playerCommand)
 
         if (!intentResponses.length) {
             await this.#handleUnknownCommand();
