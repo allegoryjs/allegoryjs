@@ -283,12 +283,6 @@ export default class IntentPipeline<
     }
 
     async #auctionIntent(intent: Intent): Promise<Array<Contribution>> {
-        // sort laws by specificity score
-        // one by one, invoke law.apply
-        //     if the status of the contribution is PASS, continue iterating
-        //     if the status is COMPLETED, stop iteration and return contribution stack
-        //     if the status is REJECTED, stop iteration and return an empty array
-
         const specificityCache = new Map<Law<ComponentSchema>, number>()
 
         const sortedLaws = this.#lawList.filter(law => law.intents.includes(intent.name)).toSorted((lawA, lawB) => {
@@ -360,7 +354,7 @@ export default class IntentPipeline<
         const intentResponses = await this.#intentClassificationModule.getIntentFromCommand(playerCommand)
 
         if (!intentResponses.length) {
-            await this.#handleUnknownCommand();
+            await this.#handleUnknownCommand()
 
             return
         }
@@ -370,9 +364,9 @@ export default class IntentPipeline<
         )
 
         if (!allIntentsAreValid) {
-            console.info('At least one intent is invalid');
-            await this.#handleUnknownCommand();
-            return;
+            console.info('At least one intent is invalid')
+            await this.#handleUnknownCommand()
+            return
         }
 
         let isDryRun = false
@@ -392,7 +386,7 @@ export default class IntentPipeline<
                 isDryRun = true
             }
 
-            this.#auctionIntent(intent)
+            const contributions = this.#auctionIntent(intent)
 
 
         }

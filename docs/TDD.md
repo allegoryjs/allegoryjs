@@ -85,13 +85,9 @@ The engine minimizes tooling friction, favoring a "Library" approach over a "Fra
 *   **Library:** Distributed as a standard NPM package (ESM). It is bundler-agnostic and works with Vite, Webpack, or Next.js.
 *   **No Compiler:** The core engine does not require a build step to run. It creates entities and logic at runtime.
 
-### 6.2. Cloud Services (Monetization)
-*   **Synthetic Data Generation:** A CLI tool scans the codebase for Entities and Intents, uploads metadata to the Allegory Cloud, and uses an LLM to generate synonym vectors.
-*   **Value Prop:** This saves the developer from writing manual NLP training data ("rusty sword", "old blade", "jagged metal") while keeping the runtime download size small (vectors only, no model weights).
-
 ---
 
 ## 7. Developer Experience (DX)
 *   **Fluent API:** A `ThereIsA...` builder pattern allows developers to define entities and logic in natural-reading chains, handling Deferred Resolution of IDs automatically.
-*   **Ejectable Themes:** Premium UI Kits are sold as source code templates (e.g., "Cyberpunk UI"), giving developers full ownership and customization power without dependency lock-in.
+*   **Ejectable Themes:** UI/Logic Kits can be packaged separately to create DSL-like APIs, e.g. a CYOA game won't have an inventory system, so it won't need any API for that, but it may have a "story branch" API that a Zork-like won't have; these different styles of game will all benefit from the NLP and intent pipeline of the engine
 *   **Implicit Layering:** The API automatically assigns Specificity Layers based on usage (e.g., `.onIntent()` implies Instance Layer), hiding the complexity of the bidding system from the casual user.
