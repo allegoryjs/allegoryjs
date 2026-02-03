@@ -72,8 +72,16 @@ interface IntentClassificationResponse {
 interface LawContext {
     actor?: Entity
     target?: Entity
-    auxiliary?: Entity[]
     ecsUtils: ReturnType<InstanceType<typeof ECS>["getReadonlyFacade"]>
+
+    // the list of auxiliaries (implements, tools, etc.) that the user
+    // issued the command with, sorted in the order that produces
+    // the highest specificity for the given Law (tie goes to user order)
+    auxiliary?: Entity[]
+
+    // the list of auxiliaries as they originally appeared in the
+    // user's command, in case the Law cares about the actual order
+    originalAuxiliaries?: Entity[]
 }
 
 type MutationOp =
@@ -89,7 +97,8 @@ interface Contribution {
     narrations?: Array<string>
     events?: Array<EngineEvent>
 }
-
+// expresses the criteria which constitute a scenario the Law is concerned with
+// e.g. if the entity has component ToolComponent and ToolComponent.type === 'wrench'
 interface LawConcern<ComponentSchema extends EngineComponentSchema> {
     components?: Array<keyof ComponentSchema>
     props?: Array<{
@@ -100,9 +109,21 @@ interface LawConcern<ComponentSchema extends EngineComponentSchema> {
     ids?: Array<string>
 }
 
+// a matcher represents a scenario that a Law cares about
+// e.g. the actor is the player, the target is an NPC, and the aux is a sword
+// the specificity of each concern in the matcher is added together,
+// then whatever matcher has the highest total specificity is treated
+// as the Law's specificity for a given Intent
 interface LawMatcher<ComponentSchema extends EngineComponentSchema> {
     actor?: LawConcern<ComponentSchema>
     target?: LawConcern<ComponentSchema>
+
+    // the criteria for matching auxiliary entities.
+    // for most games, these are implements or tools,
+    // e.g. "fix car with wrench and spark plug" ->
+    //      the 'auxiliary' field will contain something like
+    //      [{ tags: ['wrench']}, { tags: ['sparkplug'] }]
+    //      (and perhaps some component criteria too, like ToolComponent, etc)
     auxiliary?: Array<LawConcern<ComponentSchema>>
 }
 
@@ -110,8 +131,27 @@ interface Law<ComponentSchema extends EngineComponentSchema> {
     layer: LawLayer
     name: string
     intents: Array<string> // an array of the intent names that the Law cares about
-    matchers: Array<LawMatcher<ComponentSchema>> // the scenarios that the Law cares about
     apply: (ctx: LawContext) => Promise<Contribution>
+
+    /*
+    the scenarios that the Law cares about. Given a player Intent,
+    the matcher which scores highest on specificity is considered
+    to be the Law's specificity score for that Intent.
+    for example, say there is a Law called AssaultMagicLaw
+    which handles the casting of attack magic and this Law cares
+    about two scenarios:
+    - the actor entity has tag Magician
+    - the actor entity has ID sorcerer-king
+    and there is also a Law called MagicSuppressionLaw
+    which declares that a field suppresses the spells of any actor
+    with tag Magician and tag Vulnerable. If a normal magician
+    who is vulnerable tries to cast a spell, they should be silenced,
+    i.e. MagicSuppressionLaw should win the bid.
+    But if the Sorcerer King, who is immune to silencing, casts a spell,
+    AssaultMagicLaw should win the bid. So each matcher represents
+    a use case for the given law
+    */
+    matchers: Array<LawMatcher<ComponentSchema>>
 }
 
 interface IntentClassificationModule {
@@ -192,14 +232,7 @@ export default class IntentPipeline<
                 return acc
             }
 
-            let actorHasComponent = false
-
-            if (this.#ecs.isComponent(componentName)) {
-                actorHasComponent = this.#ecs.entityHasComponent(
-                    entity,
-                    componentName
-                )
-            } else {
+            if (!this.#ecs.isComponent(componentName)) {
                 console.warn(`Property matchers must be valid components (received ${componentName})`)
                 return acc
             }
@@ -260,13 +293,66 @@ export default class IntentPipeline<
         }) => {
             const actorScore = actor && actorConcern ? this.#calculateConcernSpecificity(actor, actorConcern) : 0
             const targetScore = target && targetConcern ? this.#calculateConcernSpecificity(target, targetConcern) : 0
-            const auxiliaryScore = auxConcerns ? (auxiliary?.reduce((acc, auxEntity, index) => {
-                if (!auxConcerns[index]) {
-                    return acc
+
+            // to find the correct score for auxiliary entities, we need to look at all
+            // permutations of aux entity order, and compare each of their scores, and
+            // set the total matcher aux score to whichever is highest.
+            // this is to account for the scenario where the player enters something like,
+            // "fix the car with the wrench, dielectric grease, and spark plug"
+            // so the aux entity order is wrench, grease, spark plug,
+            // but perhaps the MechanicLaw declared its aux concerns like spark plug, wrench, grease
+            // in such a case, the matcher score would be inaccurate if we naively assumed
+            // that the player always inputs in the "right" order.
+            // now, there is a scenario where the order does actually matter, like placing
+            // cursed items onto an altar in a specific order for a ritual; if the player gets it
+            // wrong, they die. this is why, though the score is calculated off of the highest match,
+            // the Law is invoked with the original ordering alongside the reordered list in the ctx
+            let highestScoreAuxPermutation = auxiliary
+            const auxiliaryScore = !(auxConcerns?.length && auxiliary?.length) ? 0 : (() => {
+                type PermutationIndex = number
+                type Score = number
+                const scoreMap = new Map<PermutationIndex, Score>()
+                let permutations: Array<Array<Entity>> = [[]]
+
+                for (let entityId of auxiliary) {
+                    const temp: Array<Array<Entity>> = []
+
+                    for (let permutation of permutations) {
+                        for (let index = 0; index <= permutation.length; index++) {
+                            const newPermutation = [...permutation]
+                            newPermutation.splice(index, 0, entityId)
+                            temp.push(newPermutation)
+                        }
+                    }
+                    permutations = temp
                 }
-                // eztodo this assumes aux entities are ordered the same as aux concerns. this is an issue
-                return acc + this.#calculateConcernSpecificity(auxEntity, auxConcerns[index])
-            }, 0) ?? 0) : 0
+
+                permutations.forEach((permutation, permutationIndex) => {
+                    let permutationScore = 0
+
+                    for (const [concernIndex, auxConcern] of auxConcerns.entries()) {
+                        if (permutation[concernIndex]) {
+                            permutationScore += this.#calculateConcernSpecificity(permutation[concernIndex], auxConcern)
+                        }
+                    }
+
+                    scoreMap.set(permutationIndex, permutationScore)
+                })
+
+                let highScore = 0
+                let highestScoringPermutationIndex: number = 0
+                scoreMap.entries().forEach(([permutationIndex, score]) => {
+                    if (score > highScore) {
+                        highScore = score
+                        highestScoringPermutationIndex = permutationIndex
+                    }
+                })
+
+
+                // eztodo need to get this permutation out of this function and into the law context
+                highestScoreAuxPermutation = permutations[highestScoringPermutationIndex]
+                return highScore
+            })()
 
             if ([actorScore, targetScore, auxiliaryScore].some(score => score < 0)) {
                 return
