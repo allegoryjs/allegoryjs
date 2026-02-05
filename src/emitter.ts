@@ -1,5 +1,6 @@
 export const defaultEmitStreams = Object.freeze({
-    narrate: 'narrate'
+    narrate: 'narrate',
+    intentRejected: 'intent-rejected'
 })
 
 export interface EngineEvent {

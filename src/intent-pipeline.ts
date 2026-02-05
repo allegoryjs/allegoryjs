@@ -84,16 +84,24 @@ interface LawContext {
     originalAuxiliaries?: Entity[]
 }
 
-type MutationOp =
-    | { op: 'UPDATE',  entity: number, component: string, value: object } // Merges data
-    | { op: 'SET',     entity: number, component: string, value: object } // Replaces data completely
-    | { op: 'ADD',     entity: number, component: string, value: object }
-    | { op: 'REMOVE',  entity: number, component: string }
-    | { op: 'DESTROY', entity: number }
+export enum LawMutationOpType {
+    update = 'UPDATE',
+    set = 'SET',
+    add = 'ADD',
+    remove = 'REMOVE',
+    destroy = 'DESTROY',
+}
 
-interface Contribution {
+export type MutationOp<ComponentSchema extends EngineComponentSchema> =
+    | { op: LawMutationOpType.update,  entity: number, component: keyof ComponentSchema, value: object } // Merges data
+    | { op: LawMutationOpType.set,     entity: number, component: keyof ComponentSchema, value: object } // Replaces data completely
+    | { op: LawMutationOpType.add,     entity: number, component: keyof ComponentSchema, value: object }
+    | { op: LawMutationOpType.remove,  entity: number, component: keyof ComponentSchema }
+    | { op: LawMutationOpType.destroy, entity: number }
+
+interface Contribution<ComponentSchema extends EngineComponentSchema> {
     status: ContributionStatus
-    mutations?: Array<MutationOp>
+    mutations?: Array<MutationOp<ComponentSchema>>
     narrations?: Array<string>
     events?: Array<EngineEvent>
 }
@@ -137,7 +145,7 @@ interface Law<ComponentSchema extends EngineComponentSchema> {
     layer: LawLayer
     name: string
     intents: Array<string> // an array of the intent names that the Law cares about
-    apply: (ctx: LawContext) => Promise<Contribution>
+    apply: (ctx: LawContext) => Promise<Contribution<ComponentSchema>>
 
     /*
     the scenarios that the Law cares about. Given a player Intent,
@@ -191,7 +199,7 @@ export default class IntentPipeline<
     }
 
     get #lawList() {
-        return Array.from(this.#laws).map(([, law]) => law)
+        return Array.from(this.#laws.values())
     }
 
     async #handleUnknownCommand() {
@@ -376,7 +384,7 @@ export default class IntentPipeline<
         return highestScoringBid
     }
 
-    async #auctionIntent(intent: Intent): Promise<Array<Contribution>> {
+    async #auctionIntent(intent: Intent): Promise<Array<Contribution<ComponentSchema>>> {
         // the list of all valid bids sorted in descending order of score
         const bids = this.#lawList
             .filter(law => law.intents.includes(intent.name))
@@ -392,7 +400,7 @@ export default class IntentPipeline<
                 return bidB.score - bidA.score;
             })
 
-        const contributions: Array<Contribution> = []
+        const contributions: Array<Contribution<ComponentSchema>> = []
 
         for (const bid of bids) {
             const { law, reorderedAuxiliaries } = bid
@@ -463,9 +471,8 @@ export default class IntentPipeline<
             if (dryRun) {
                 isDryRun = true
             }
-
+            
             const contributions = this.#auctionIntent(intent)
-
 
         }
     }
