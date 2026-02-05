@@ -109,6 +109,12 @@ interface LawConcern<ComponentSchema extends EngineComponentSchema> {
     ids?: Array<string>
 }
 
+interface LawBid<ComponentSchema extends EngineComponentSchema> {
+    law: Law<ComponentSchema>;
+    score: number;
+    reorderedAuxiliaries?: Entity[]; // The data we want to save!
+}
+
 // a matcher represents a scenario that a Law cares about
 // e.g. the actor is the player, the target is an NPC, and the aux is a sword
 // the specificity of each concern in the matcher is added together,
@@ -272,7 +278,7 @@ export default class IntentPipeline<
     }
 
     // returns the specificity of the highest scoring matched scenario
-    #calculateSpecificity(law: Law<ComponentSchema>, intent: Intent): number {
+    #calculateBid(law: Law<ComponentSchema>, intent: Intent): LawBid<ComponentSchema> | null {
         const {
             name,
             actor,
@@ -281,10 +287,10 @@ export default class IntentPipeline<
         } = intent
 
         if (!law.intents.includes(name)) {
-            return -1
+            return null
         }
 
-        let highestScore = 0
+        let highestScoringBid: LawBid<ComponentSchema> | null = null
 
         law.matchers.forEach(({
             actor: actorConcern,
@@ -348,8 +354,6 @@ export default class IntentPipeline<
                     }
                 })
 
-
-                // eztodo need to get this permutation out of this function and into the law context
                 highestScoreAuxPermutation = permutations[highestScoringPermutationIndex]
                 return highScore
             })()
@@ -360,58 +364,46 @@ export default class IntentPipeline<
 
             const totalScore = actorScore + targetScore + auxiliaryScore
 
-            if (totalScore > highestScore) {
-                highestScore = totalScore
+            if (!highestScoringBid || totalScore > highestScoringBid.score) {
+                highestScoringBid = {
+                    law,
+                    score: totalScore,
+                    reorderedAuxiliaries: highestScoreAuxPermutation
+                }
             }
         })
 
-        return highestScore
+        return highestScoringBid
     }
 
     async #auctionIntent(intent: Intent): Promise<Array<Contribution>> {
-        const specificityCache = new Map<Law<ComponentSchema>, number>()
+        // the list of all valid bids sorted in descending order of score
+        const bids = this.#lawList
+            .filter(law => law.intents.includes(intent.name))
+            .flatMap(law => {
+                const bid = this.#calculateBid(law, intent)
 
-        const sortedLaws = this.#lawList.filter(law => law.intents.includes(intent.name)).toSorted((lawA, lawB) => {
-            const layerA = lawA.layer;
-            const layerB = lawB.layer;
-
-            if (layerA > layerB) {
-                return -1
-            } if (layerB > layerA) {
-                return 1
-            }
-
-            if (!specificityCache.has(lawA)) {
-                specificityCache.set(lawA, this.#calculateSpecificity(lawA, intent))
-            }
-
-            if (!specificityCache.has(lawB)) {
-                specificityCache.set(lawB, this.#calculateSpecificity(lawB, intent))
-            }
-
-            const lawASpecificity = specificityCache.get(lawA) ?? 0
-            const lawBSpecificity = specificityCache.get(lawB) ?? 0
-
-            if (lawASpecificity > lawBSpecificity) {
-                return -1
-            }
-
-            if (lawBSpecificity > lawASpecificity) {
-                return 1
-            }
-
-            return 0
-        }).filter(law => specificityCache.get(law) !== -1)
+                return bid ? [bid] : []
+            }).sort((bidA, bidB) => {
+                const layerDiff = bidB.law.layer - bidA.law.layer
+                if (layerDiff !== 0) {
+                    return layerDiff
+                }
+                return bidB.score - bidA.score;
+            })
 
         const contributions: Array<Contribution> = []
-        const lawCtx: LawContext = {
-            actor: intent.actor,
-            target: intent.target,
-            auxiliary: intent.auxiliary, // eztodo will i need to store specific relationships between aux entities, or just assume they are all stated like "open the vent with the crowbar and the screwdriver"
-            ecsUtils: this.#ecs.getReadonlyFacade()
-        }
 
-        for (const law of sortedLaws) {
+        for (const bid of bids) {
+            const { law, reorderedAuxiliaries } = bid
+            const lawCtx: LawContext = {
+                actor: intent.actor,
+                target: intent.target,
+                auxiliary: reorderedAuxiliaries,
+                originalAuxiliaries: intent.auxiliary,
+                ecsUtils: this.#ecs.getReadonlyFacade(),
+            }
+
             const result = await law.apply(lawCtx)
 
             if (result.status === ContributionStatus.rejected) {
