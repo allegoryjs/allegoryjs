@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import ECS, { type EngineComponentSchema } from "../src/ecs";
+import ECS, { type EngineComponentSchema } from '../src/ecs';
 
-describe("ECS", () => {
-  test("creates entities and queries by components", () => {
+describe('ECS', () => {
+  test('creates entities and queries by components', () => {
     const ecs = new ECS<{
       position: {
         x: number,
@@ -35,7 +35,7 @@ describe("ECS", () => {
     expect(ecs.getEntitiesByComponents(position)).toEqual([entityA]);
   });
 
-  test("setComponentOnEntity sets component data", () => {
+  test('setComponentOnEntity sets component data', () => {
     const ecs = new ECS<{
       health: {
         current: number,
@@ -52,7 +52,7 @@ describe("ECS", () => {
     expect(ecs.getEntityComponentData(entity, health)).toEqual({ current: 50, max: 150 });
   });
 
-  test("setComponentOnEntity throws error for undefined component", () => {
+  test('setComponentOnEntity throws error for undefined component', () => {
     const ecs = new ECS<{
       position: { x: number, y: number }
     } & EngineComponentSchema>();
@@ -63,7 +63,7 @@ describe("ECS", () => {
     }).toThrow('Unknown component type: undefinedComponent');
   });
 
-  test("updateComponentData merges component data", () => {
+  test('updateComponentData merges component data', () => {
     const ecs = new ECS<{
       stats: {
         strength: number,
@@ -91,7 +91,7 @@ describe("ECS", () => {
     });
   });
 
-  test("updateComponentData throws error for undefined component", () => {
+  test('updateComponentData throws error for undefined component', () => {
     const ecs = new ECS<{
       position: { x: number, y: number }
     } & EngineComponentSchema>();

@@ -77,7 +77,15 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
         const store = this.#components.get(name);
 
         if (!store) {
-            throw new Error(`Unknown component type: ${name}`)
+            throw new Error(`Can't set component on entity ${entity}; unknown component type: ${name}`)
+        }
+
+        if (!this.#activeEntities.has(entity)) {
+            if (entity > this.#nextEntityId - 1) {
+                throw new Error(`Can't set component on entity ${entity}; entity does not exist`)
+            }
+
+            throw new Error(`Can't set component on entity ${entity}; entity is destroyed`)
         }
 
         store.set(entity, data)
@@ -87,42 +95,95 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
     updateComponentData<ComponentName extends keyof ComponentSchema & string> (
         entity: number,
         name: ComponentName,
-        data: Partial<ComponentSchema[ComponentName]>
+        data: Partial<ComponentSchema[keyof ComponentSchema]>
     ) {
         const store = this.#components.get(name);
 
         if (!store) {
-            throw new Error(`Unknown component type: ${name}`)
+            throw new Error(`Can't update component data for entity ${entity}; Unknown component type: ${name}`)
         }
 
+        const existingComponentData = store.get(entity)
+
+        if (!this.#activeEntities.has(entity)) {
+            if (entity > this.#nextEntityId - 1) {
+                throw new Error(`Can't update component data on entity ${entity}; entity does not exist`)
+            }
+
+            throw new Error(`Can't update component data on entity ${entity}; entity is destroyed`)
+        }
+
+        if (!existingComponentData) {
+            throw new Error(`Can't update component data for entity ${entity}; entity does not have component ${name}`)
+        }
+
+
         store.set(entity, {
-            ...store.get(entity),
+            ...existingComponentData,
             ...data
         })
     }
 
-    removeComponentFromEntity<ComponentName extends keyof ComponentSchema>(
+    removeComponentFromEntity<ComponentName extends keyof ComponentSchema & string>(
         entity: Entity,
         componentType: ComponentName,
     ) {
-        this.#components.get(componentType)?.delete(entity)
+        const store = this.#components.get(componentType)
+
+        if (!store) {
+            throw new Error(`Can't remove component from entity ${entity}; entity does not have component ${componentType}`)
+        }
+
+        if (!this.#activeEntities.has(entity)) {
+            if (entity > this.#nextEntityId - 1) {
+                throw new Error(`Can't remove component from entity ${entity}; entity does not exist`)
+            }
+
+            throw new Error(`Can't remove component from entity ${entity}; entity is destroyed`)
+        }
+
+        store.delete(entity)
     }
 
-    getEntityComponentData<ComponentName extends keyof ComponentSchema>(
+    getEntityComponentData<ComponentName extends keyof ComponentSchema & string>(
         entity: Entity,
         name: ComponentName,
-    ): Readonly<ComponentSchema[ComponentName]> | undefined {
-        const store = this.#components.get(name);
-        return store?.get(entity)
-            ? deepFreeze(store.get(entity) as ComponentSchema[ComponentName])
-            : undefined;
+    ): Readonly<ComponentSchema[ComponentName]> {
+        const store = this.#components.get(name)
+        const componentData = store?.get(entity)
+
+
+        if (!store || !componentData) {
+            throw new Error(`Can't get component data for entity ${entity}; entity does not have component ${name}`)
+        }
+
+        if (!this.#activeEntities.has(entity)) {
+            if (entity > this.#nextEntityId - 1) {
+                throw new Error(`Can't get component data for entity ${entity}; entity does not exist`)
+            }
+
+            throw new Error(`Can't get component data for entity ${entity}; entity is destroyed`)
+        }
+
+        return deepFreeze(componentData)
     }
 
-    entityHasComponent<ComponentName extends keyof ComponentSchema>(
+    entityHasComponent<ComponentName extends keyof ComponentSchema & string>(
         entity: Entity,
         componentType: ComponentName,
     ) {
+        if (!this.#activeEntities.has(entity)) {
+            if (entity > this.#nextEntityId - 1) {
+                throw new Error(`Can't check for component presence on entity ${entity}; entity does not exist`)
+            }
+
+            throw new Error(`Can't check for component presence on entity ${entity}; entity is destroyed`)
+        }
         const component = this.#components.get(componentType)
+
+        if (!component) {
+            throw new Error(`Can't check for component presence on entity ${entity}; component ${componentType} does not exist`)
+        }
         return !!component?.has(entity)
     }
 
