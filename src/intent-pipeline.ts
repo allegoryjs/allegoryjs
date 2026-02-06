@@ -1,6 +1,6 @@
 import type ECS from './ecs'
 import type { EngineComponentSchema, Entity } from './ecs'
-import Emitter, { defaultEmitStreams, type EngineEvent } from './emitter'
+import Emitter, { defaultEmitStreams, engineErrorCodes, type EngineEvent } from './emitter'
 import type LocalizationModule from './localization'
 
 enum LawLayer {
@@ -84,20 +84,23 @@ interface LawContext {
     originalAuxiliaries?: Entity[]
 }
 
+type EntityRef = Entity | string
+
 export enum LawMutationOpType {
     update = 'UPDATE',
     set = 'SET',
     add = 'ADD',
     remove = 'REMOVE',
     destroy = 'DESTROY',
+    create = 'CREATE',
 }
 
 export type MutationOp<ComponentSchema extends EngineComponentSchema> =
-    | { op: LawMutationOpType.update,  entity: number, component: keyof ComponentSchema, value: object } // Merges data
-    | { op: LawMutationOpType.set,     entity: number, component: keyof ComponentSchema, value: object } // Replaces data completely
-    | { op: LawMutationOpType.add,     entity: number, component: keyof ComponentSchema, value: object }
-    | { op: LawMutationOpType.remove,  entity: number, component: keyof ComponentSchema }
-    | { op: LawMutationOpType.destroy, entity: number }
+    | { op: LawMutationOpType.create,  alias?: string, components?: Partial<ComponentSchema>}
+    | { op: LawMutationOpType.remove,  entity: EntityRef, component: keyof ComponentSchema }
+    | { op: LawMutationOpType.update,  entity: EntityRef, component: keyof ComponentSchema, value: ComponentSchema[keyof ComponentSchema & string] } // Merges data
+    | { op: LawMutationOpType.set,     entity: EntityRef, component: keyof ComponentSchema, value: ComponentSchema[keyof ComponentSchema & string] } // Replaces data completely
+    | { op: LawMutationOpType.destroy, entity: EntityRef }
 
 interface Contribution<ComponentSchema extends EngineComponentSchema> {
     status: ContributionStatus
@@ -428,6 +431,63 @@ export default class IntentPipeline<
         return contributions
     }
 
+    #validateMutation(
+        previousMutations: Array<MutationOp<ComponentSchema>>,
+        proposedMutation: MutationOp<ComponentSchema>
+    ): boolean {
+        // eztodo
+        // including making sure an alias is valid
+        return true
+    }
+
+    #applyMutation(mutation: MutationOp<ComponentSchema>, aliasMap: Map<string, Entity>) {
+        if (mutation.op === LawMutationOpType.create) {
+            const entityID = this.#ecs.createEntity(mutation.alias)
+            if (mutation.alias) {
+                aliasMap.set(mutation.alias, entityID)
+            }
+            return
+        }
+
+        const entity = typeof mutation.entity === 'string' ?
+            aliasMap.get(mutation.entity) :
+            mutation.entity
+
+        if (typeof entity === 'undefined') {
+            // the alias is checked for validity before we each this step
+            // so if this occurs, it is likely an engine bug
+            throw new Error(`Invalid alias ${mutation.entity} referenced in mutation op`)
+        }
+
+        if (mutation.op === LawMutationOpType.remove) {
+            this.#ecs.removeComponentFromEntity(entity, mutation.component)
+            return
+        }
+
+        if (mutation.op === LawMutationOpType.destroy) {
+            this.#ecs.destroyEntity(entity)
+            return
+        }
+
+        if (mutation.op === LawMutationOpType.set) {
+            this.#ecs.setComponentOnEntity(
+                entity,
+                mutation.component as keyof ComponentSchema & string,
+                mutation.value,
+            )
+            return
+        }
+
+        if (mutation.op === LawMutationOpType.update) {
+            this.#ecs.updateComponentData(
+                entity,
+                mutation.component as keyof ComponentSchema & string,
+                mutation.value,
+            )
+            return
+        }
+    }
+
     ratifyLaw(newLaw: Law<ComponentSchema>) {
         this.#laws.set(newLaw.name, newLaw)
     }
@@ -456,6 +516,8 @@ export default class IntentPipeline<
         }
 
         let isDryRun = false
+        let rollback = false
+        const contributionStack: Array<Contribution<ComponentSchema>> = []
 
         for (let index = 0; index < intentResponses.length; index++) {
             const intentResponse = intentResponses[index];
@@ -471,9 +533,84 @@ export default class IntentPipeline<
             if (dryRun) {
                 isDryRun = true
             }
-            
-            const contributions = this.#auctionIntent(intent)
 
+            const tempContributions = await this.#auctionIntent(intent)
+            if (tempContributions.some(c => c.status === ContributionStatus.rejected)) {
+                rollback = true
+                break
+            }
+            contributionStack.push(...tempContributions)
         }
+
+        // eztodo handle dry run
+
+        if (rollback) {
+            await this.#handleUnknownCommand() // eztodo add more appropriate handler
+            return
+        }
+
+        const mutations: Array<MutationOp<ComponentSchema>> = []
+        const narrations: Array<string> = []
+        const events: Array<EngineEvent> = []
+
+        for (const contribution of contributionStack) {
+            if (contribution.mutations) {
+                let mutationsValid = true
+                for (const [index, mutation] of contribution.mutations.entries()) {
+                    const mutationIsValid = this.#validateMutation(
+                        contribution.mutations.slice(0, index === 0 ? undefined : index - 1),
+                        mutation
+                    )
+
+                    if (!mutationIsValid) {
+                        mutationsValid = false
+                        break
+                    }
+
+                    mutations.push(mutation)
+                }
+
+                if (!mutationsValid) {
+                    rollback = true
+                    break
+                }
+
+                if (contribution.narrations) {
+                    narrations.push(...contribution.narrations)
+                }
+
+                if (contribution.events) {
+                    events.push(...contribution.events)
+                }
+            }
+        }
+
+        if (rollback) {
+            await this.#handleUnknownCommand() // eztodo add more appropriate handler
+            return
+        }
+
+        // aliases allows us to reference entities which don't exist yet
+        // in mutation ops
+        // e.g. let's say a Law wants to spawn a goblin, then insert him into
+        //      an ongoing combat encounter. The Law won't have a reference for the
+        //      goblin entity ID when it declares the second mutation operation,
+        //      because entities aren't created until after all laws put their mutation
+        //      requests on the stack. So the Law adds an UPDATE mutation op referencing the
+        //      entity "goblin_05" *after* it adds a CREATE op with ID = "goblin_05".
+        //      so this map resolves an alias to a real entity ID. Note that the alias
+        //      given to the CREATE op becomes the entity's meta ID, so it must be unique
+        const aliasMap = new Map<string, Entity>()
+
+        mutations.forEach((mutation) => {
+            try {
+                this.#applyMutation(mutation, aliasMap)
+            } catch {
+                this.#emitter.emit(defaultEmitStreams.engineError, {
+                    code: engineErrorCodes.unknownMutationAlias,
+                    reason: 'An invalid alias was used in a mutation op in the intent pipeline',
+                })
+            }
+        })
     }
 }

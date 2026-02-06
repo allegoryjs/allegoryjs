@@ -54,8 +54,8 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
 
         this.#activeEntities.add(id)
 
-        this.addComponentToEntity(id, 'Tags', { list: new Set<string>() })
-        this.addComponentToEntity(
+        this.setComponentOnEntity(id, 'Tags', { list: new Set<string>() })
+        this.setComponentOnEntity(
             id,
             'Meta',
             {
@@ -68,7 +68,8 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
         return id
     }
 
-    addComponentToEntity<ComponentName extends keyof ComponentSchema & string>(
+    // destructive; overwrites existing component data, if any
+    setComponentOnEntity<ComponentName extends keyof ComponentSchema & string>(
         entity: number,
         name: ComponentName,
         data: ComponentSchema[ComponentName]
@@ -80,6 +81,24 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
         }
 
         store.set(entity, data)
+    }
+
+    // merge component data with new data
+    updateComponentData<ComponentName extends keyof ComponentSchema & string> (
+        entity: number,
+        name: ComponentName,
+        data: ComponentSchema[ComponentName]
+    ) {
+        const store = this.#components.get(name);
+
+        if (!store) {
+            throw new Error(`Unknown component type: ${name}`)
+        }
+
+        store.set(entity, {
+            ...store.get(entity),
+            ...data
+        })
     }
 
     removeComponentFromEntity<ComponentName extends keyof ComponentSchema>(

@@ -1,5 +1,10 @@
 export const defaultEmitStreams = Object.freeze({
     narrate: 'narrate',
+    engineError: 'engine-error',
+})
+
+export const engineErrorCodes = Object.freeze({
+    unknownMutationAlias: 'unknown-mutation-alias'
 })
 
 export interface EngineEvent {
@@ -8,7 +13,7 @@ export interface EngineEvent {
 }
 
 export default class Emitter {
-    emit(eventName: string, payload: unknown): Promise<void> {
+    emit(eventName: string, payload?: unknown): Promise<void> {
         console.info('event emitted')
         console.log(eventName)
         console.dir(payload)
