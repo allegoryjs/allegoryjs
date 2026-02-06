@@ -87,7 +87,7 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
     updateComponentData<ComponentName extends keyof ComponentSchema & string> (
         entity: number,
         name: ComponentName,
-        data: ComponentSchema[ComponentName]
+        data: Partial<ComponentSchema[ComponentName]>
     ) {
         const store = this.#components.get(name);
 
