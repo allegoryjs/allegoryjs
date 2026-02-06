@@ -1,9 +1,18 @@
 import { describe, expect, test } from 'bun:test';
-import ECS from "../src/ecs";
+import ECS, { type EngineComponentSchema } from "../src/ecs";
 
 describe("ECS", () => {
   test("creates entities and queries by components", () => {
-    const ecs = new ECS();
+    const ecs = new ECS<{
+      position: {
+        x: number,
+        y: number,
+      },
+      velocity: {
+        x: number,
+        y: number,
+      }
+    } & EngineComponentSchema>();
     const position = ecs.defineComponent('position');
     const velocity = ecs.defineComponent('velocity');
 
