@@ -17,7 +17,7 @@ export interface EngineComponentSchema {
     }
 }
 
-export default class ECS<ComponentSchema extends EngineComponentSchema = EngineComponentSchema> {
+export default class ECS<ComponentSchema extends (EngineComponentSchema & Record<string, any>) = EngineComponentSchema> {
     #nextEntityId = 1
     #activeEntities = new Set<number>()
     #components = new Map<
@@ -197,33 +197,37 @@ export default class ECS<ComponentSchema extends EngineComponentSchema = EngineC
         )
     }
 
-    getEntitiesByComponents<ComponentName extends keyof ComponentSchema>(
+    getEntitiesByComponents<ComponentName extends keyof ComponentSchema & string>(
         ...componentTypes: ComponentName[]
     ): Entity[] {
-        if (componentTypes.length === 0) return [];
+        if (componentTypes.length === 0) return []
+
+        if (!componentTypes.every(type => this.isComponent(type))) {
+            const missingTypes = componentTypes.filter(type => !this.isComponent(type))
+            throw new Error(`Cannot get entities by component: given components ${missingTypes.join(', ')} do not exist`)
+        }
 
         const sortedTypes = componentTypes.sort((a, b) => {
-            return (this.#components.get(a)?.size ?? 0) - (this.#components.get(b)?.size ?? 0);
+            return (this.#components.get(a)?.size ?? 0) - (this.#components.get(b)?.size ?? 0)
         });
 
-        const [smallestType, ...rest] = sortedTypes;
+        const [smallestType, ...rest] = sortedTypes
 
         if (!smallestType) {
-            console.warn('There was an issue while fetching components');
-            return [];
+            throw new Error('Failed to sort component types')
         }
-        const smallestStore = this.#components.get(smallestType);
+        const smallestStore = this.#components.get(smallestType)
 
-        if (!smallestStore || smallestStore.size === 0) return [];
+        if (!smallestStore || smallestStore.size === 0) return []
 
-        const result: Entity[] = [];
+        const result: Entity[] = []
 
         for (const entity of smallestStore.keys()) {
-            const hasAll = rest.every(type => this.entityHasComponent(entity, type));
-            if (hasAll) result.push(entity);
+            const hasAll = rest.every(type => this.entityHasComponent(entity, type))
+            if (hasAll) result.push(entity)
         }
 
-        return result;
+        return result
     }
 
     destroyEntity(entity: Entity) {
