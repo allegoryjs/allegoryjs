@@ -96,10 +96,10 @@ export enum LawMutationOpType {
 }
 
 export type MutationOp<ComponentSchema extends EngineComponentSchema> =
-    | { op: LawMutationOpType.create,  alias?: string, components?: Partial<ComponentSchema>}
-    | { op: LawMutationOpType.remove,  entity: EntityRef, component: keyof ComponentSchema }
-    | { op: LawMutationOpType.update,  entity: EntityRef, component: keyof ComponentSchema, value: ComponentSchema[keyof ComponentSchema & string] } // Merges data
-    | { op: LawMutationOpType.set,     entity: EntityRef, component: keyof ComponentSchema, value: ComponentSchema[keyof ComponentSchema & string] } // Replaces data completely
+    | { op: LawMutationOpType.create,  alias?: string, components?: Partial<ComponentSchema & string>}
+    | { op: LawMutationOpType.remove,  entity: EntityRef, component: keyof ComponentSchema & string }
+    | { op: LawMutationOpType.update,  entity: EntityRef, component: keyof ComponentSchema & string, value: ComponentSchema[keyof ComponentSchema & string] } // Merges data
+    | { op: LawMutationOpType.set,     entity: EntityRef, component: keyof ComponentSchema & string, value: ComponentSchema[keyof ComponentSchema & string] } // Replaces data completely
     | { op: LawMutationOpType.destroy, entity: EntityRef }
 
 interface Contribution<ComponentSchema extends EngineComponentSchema> {
@@ -111,7 +111,7 @@ interface Contribution<ComponentSchema extends EngineComponentSchema> {
 // expresses the criteria which constitute a scenario the Law is concerned with
 // e.g. if the entity has component ToolComponent and ToolComponent.type === 'wrench'
 interface LawConcern<ComponentSchema extends EngineComponentSchema> {
-    components?: Array<keyof ComponentSchema>
+    components?: Array<keyof ComponentSchema & string>
     props?: Array<{
         prop: string // strings must be in the format of ComponentName.propName or they are ignored
         value: string | number | boolean // the value that counts as a match
