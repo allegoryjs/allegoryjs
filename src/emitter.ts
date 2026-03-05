@@ -1,6 +1,5 @@
 export const defaultEmitStreams = Object.freeze({
     narrate: 'narrate',
-    engineError: 'engine-error',
 })
 
 export const engineErrorCodes = Object.freeze({

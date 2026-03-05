@@ -89,7 +89,6 @@ type EntityRef = Entity | string
 export enum LawMutationOpType {
     update = 'UPDATE',
     set = 'SET',
-    add = 'ADD',
     remove = 'REMOVE',
     destroy = 'DESTROY',
     create = 'CREATE',
@@ -431,13 +430,41 @@ export default class IntentPipeline<
         return contributions
     }
 
-    #validateMutation(
-        previousMutations: Array<MutationOp<ComponentSchema>>,
-        proposedMutation: MutationOp<ComponentSchema>
-    ): boolean {
-        // eztodo
-        // including making sure an alias is valid
-        return true
+    #executeMutations(mutations: Array<MutationOp<ComponentSchema>>) {
+        // aliases allows us to reference entities which don't exist yet
+        // in mutation ops
+        // e.g. let's say a Law wants to spawn a goblin, then insert him into
+        //      an ongoing combat encounter. The Law won't have a reference for the
+        //      goblin entity ID when it declares the second mutation operation,
+        //      because entities aren't created until after all laws put their mutation
+        //      requests on the stack. So the Law adds an UPDATE mutation op referencing the
+        //      entity "goblin_05" *after* it adds a CREATE op with ID = "goblin_05".
+        //      so this map resolves an alias to a real entity ID. Note that the alias
+        //      given to the CREATE op becomes the entity's meta ID, so it must be unique
+        const aliasMap = new Map<string, Entity>()
+
+        for (const mutation of mutations) {
+            this.#applyMutation(mutation, aliasMap)
+        }
+    }
+
+    #validateMutations(
+        mutations: Array<MutationOp<ComponentSchema>>
+    ): void {
+        const futureAliases = new Set<string>()
+
+        for (const mutation of mutations) {
+            if (mutation.op === LawMutationOpType.create && mutation.alias) {
+                futureAliases.add(mutation.alias)
+            } else if (mutation.op !== LawMutationOpType.create) {
+                // if the entity identifier is a string, it is an alias
+                if (typeof mutation.entity === 'string') {
+                    if (!futureAliases.has(mutation.entity)) {
+                        throw new Error(`Critical logic error: Law referenced unknown alias '${mutation.entity}'`)
+                    }
+                }
+            }
+        }
     }
 
     #applyMutation(mutation: MutationOp<ComponentSchema>, aliasMap: Map<string, Entity>) {
@@ -449,12 +476,14 @@ export default class IntentPipeline<
             return
         }
 
+        // remember that entity ECS IDs are numbers;
+        // aliases are strings which will be set as the Meta IDs of new entities when the mutation stack is executed
         const entity = typeof mutation.entity === 'string' ?
             aliasMap.get(mutation.entity) :
             mutation.entity
 
         if (typeof entity === 'undefined') {
-            // the alias is checked for validity before we each this step
+            // the alias is checked for validity before we reach this step
             // so if this occurs, it is likely an engine bug
             throw new Error(`Invalid alias ${mutation.entity} referenced in mutation op`)
         }
@@ -496,7 +525,7 @@ export default class IntentPipeline<
         this.#laws.delete(name)
     }
 
-    async handleCommand(playerCommand: string) {
+    async #handleCommand(playerCommand: string) {
         const intentResponses = await this.#intentClassificationModule.getIntentFromCommand(playerCommand)
 
         if (!intentResponses.length) {
@@ -523,6 +552,7 @@ export default class IntentPipeline<
             const intentResponse = intentResponses[index];
 
             if (!intentResponse || !intentResponse.intent) {
+                // eztodo throw here?
                 console.warn('There was an issue accessing the intent response');
                 await this.#handleUnknownCommand();
                 return;
@@ -554,63 +584,24 @@ export default class IntentPipeline<
         const events: Array<EngineEvent> = []
 
         for (const contribution of contributionStack) {
-            if (contribution.mutations) {
-                let mutationsValid = true
-                for (const [index, mutation] of contribution.mutations.entries()) {
-                    const mutationIsValid = this.#validateMutation(
-                        contribution.mutations.slice(0, index === 0 ? undefined : index - 1),
-                        mutation
-                    )
+            if (contribution?.mutations?.length) {
+                // throws if a mutation is invalid
+                // eztodo handle if alias is never used to create an entity
+                this.#validateMutations(contribution.mutations)
 
-                    if (!mutationIsValid) {
-                        mutationsValid = false
-                        break
-                    }
+                mutations.push(...contribution.mutations)
+            }
 
-                    mutations.push(mutation)
-                }
+            if (contribution?.narrations?.length) {
+                narrations.push(...contribution.narrations)
+            }
 
-                if (!mutationsValid) {
-                    rollback = true
-                    break
-                }
-
-                if (contribution.narrations) {
-                    narrations.push(...contribution.narrations)
-                }
-
-                if (contribution.events) {
-                    events.push(...contribution.events)
-                }
+            if (contribution?.events?.length) {
+                events.push(...contribution.events)
             }
         }
 
-        if (rollback) {
-            await this.#handleUnknownCommand() // eztodo add more appropriate handler
-            return
-        }
+        this.#executeMutations(mutations)
 
-        // aliases allows us to reference entities which don't exist yet
-        // in mutation ops
-        // e.g. let's say a Law wants to spawn a goblin, then insert him into
-        //      an ongoing combat encounter. The Law won't have a reference for the
-        //      goblin entity ID when it declares the second mutation operation,
-        //      because entities aren't created until after all laws put their mutation
-        //      requests on the stack. So the Law adds an UPDATE mutation op referencing the
-        //      entity "goblin_05" *after* it adds a CREATE op with ID = "goblin_05".
-        //      so this map resolves an alias to a real entity ID. Note that the alias
-        //      given to the CREATE op becomes the entity's meta ID, so it must be unique
-        const aliasMap = new Map<string, Entity>()
-
-        mutations.forEach((mutation) => {
-            try {
-                this.#applyMutation(mutation, aliasMap)
-            } catch {
-                this.#emitter.emit(defaultEmitStreams.engineError, {
-                    code: engineErrorCodes.unknownMutationAlias,
-                    reason: 'An invalid alias was used in a mutation op in the intent pipeline',
-                })
-            }
-        })
     }
 }
