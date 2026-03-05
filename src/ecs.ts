@@ -21,7 +21,7 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
     #nextEntityId = 1
     #activeEntities = new Set<number>()
     #components = new Map<
-        keyof ComponentSchema,
+        keyof ComponentSchema & string,
         Map<Entity, ComponentSchema[keyof ComponentSchema]>
     >()
     #prettyIdMap = new Map<string, Entity>()
@@ -36,7 +36,7 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
         return (Array.from(this.#components.keys()) as string[]).includes(name)
     }
 
-    defineComponent<ComponentName extends keyof ComponentSchema>(name: ComponentName) {
+    defineComponent<ComponentName extends keyof ComponentSchema & string>(name: ComponentName) {
         if (this.#components.has(name)) {
             throw new Error(`Component named ${String(name)} already exists`)
         }

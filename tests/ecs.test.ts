@@ -60,7 +60,7 @@ describe('ECS', () => {
 
     expect(() => {
       ecs.setComponentOnEntity(entity, 'undefinedComponent' as any, { x: 0, y: 0 });
-    }).toThrow('Unknown component type: undefinedComponent');
+    }).toThrow('Can\'t set component on entity 1; unknown component type: undefinedComponent');
   });
 
   test('updateComponentData merges component data', () => {
