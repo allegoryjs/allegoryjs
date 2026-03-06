@@ -458,10 +458,8 @@ export default class IntentPipeline<
                 futureAliases.add(mutation.alias)
             } else if (mutation.op !== LawMutationOpType.create) {
                 // if the entity identifier is a string, it is an alias
-                if (typeof mutation.entity === 'string') {
-                    if (!futureAliases.has(mutation.entity)) {
-                        throw new Error(`Critical logic error: Law referenced unknown alias '${mutation.entity}'`)
-                    }
+                if (typeof mutation.entity === 'string' && !futureAliases.has(mutation.entity)) {
+                        throw new Error(`Critical logic error: Law mutation operation referenced unknown alias '${mutation.entity}'. Mutations may have been declared out of order; an entity with an alias must be CREATE-ed before it is referenced by a mutation operation.`)
                 }
             }
         }
