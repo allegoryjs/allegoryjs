@@ -2,10 +2,6 @@ export const defaultEmitStreams = Object.freeze({
     narrate: 'narrate',
 })
 
-export const engineErrorCodes = Object.freeze({
-    unknownMutationAlias: 'unknown-mutation-alias'
-})
-
 export interface EngineEvent {
     type: string
     payload?: unknown

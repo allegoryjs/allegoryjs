@@ -1,6 +1,6 @@
 import type ECS from './ecs'
 import type { EngineComponentSchema, Entity } from './ecs'
-import Emitter, { defaultEmitStreams, engineErrorCodes, type EngineEvent } from './emitter'
+import Emitter, { defaultEmitStreams, type EngineEvent } from './emitter'
 import type LocalizationModule from './localization'
 
 enum LawLayer {
@@ -63,8 +63,7 @@ interface Intent {
 
 interface IntentClassificationResponse {
     intent?: Intent
-    confidence: number
-    valid: boolean
+    confidence: number // normalized from 0 - 1
     dryRun: boolean
 }
 
@@ -72,7 +71,7 @@ interface IntentClassificationResponse {
 interface LawContext {
     actor?: Entity
     target?: Entity
-    ecsUtils: ReturnType<InstanceType<typeof ECS>["getReadonlyFacade"]>
+    ecsUtils: ReturnType<InstanceType<typeof ECS>['getReadonlyFacade']>
 
     // the list of auxiliaries (implements, tools, etc.) that the user
     // issued the command with, sorted in the order that produces
@@ -533,7 +532,7 @@ export default class IntentPipeline<
         }
 
         const allIntentsAreValid = intentResponses.every(
-            response => response.confidence >= this.#config.confidenceThreshold && response.valid
+            ({ confidence }) => confidence >= this.#config.confidenceThreshold
         )
 
         if (!allIntentsAreValid) {
@@ -584,7 +583,6 @@ export default class IntentPipeline<
         for (const contribution of contributionStack) {
             if (contribution?.mutations?.length) {
                 // throws if a mutation is invalid
-                // eztodo handle if alias is never used to create an entity
                 this.#validateMutations(contribution.mutations)
 
                 mutations.push(...contribution.mutations)
@@ -600,6 +598,16 @@ export default class IntentPipeline<
         }
 
         this.#executeMutations(mutations)
+
+        for (const narration of narrations) {
+            await this.#emitter.emit(defaultEmitStreams.narrate, [
+                this.#t(narration)
+            ])
+        }
+
+        for (const event of events) {
+            await this.#emitter.emit(event.type, event.payload)
+        }
 
     }
 }
