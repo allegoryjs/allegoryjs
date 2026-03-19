@@ -59,22 +59,24 @@ export enum LawLayer {
      *********************/
 
     Core = 0,
+    Kit = 1,
 
     /***********************
      *** Userland Layers ***
      ***********************/
 
-    Domain = 1,
-    Instance = 2
+    Game = 2,
+    Instance = 3
 }
 ```
 
 Each layer represents a classification of Law. This helps eliminate conflicts and reduce logical overhead with *specificity*, which we will talk about later. Here's what each layer is for:
 - **Core (0)**: built-in Laws, which typically handle basic functions (like saving) or fall-through cases indicating that the engine does not understand a command, and which are easily overwritten. These Laws have very low precedence. Developers won't need to add Laws in this layer unless they are trying to modify fundamental engine behavior.
-- **Domain (1)**: Laws related to the specific game being built, and/or Laws coming from a World Kit, e.g. "Taking a Cursed Item deals damage." This is where game devs will author any game logic that they want to add on top of functionality provided by World Kits.
-- **Instance (2)**: Laws related to a specific entity, attached via [Script](./world-kits.md#scripts), e.g., "Taking the Idol triggers the boulder trap." These Laws have the highest precedence.
+- **Kit (1)**: Laws introduced by World Kits, providing game-genre-specific functionality, e.g. the adventure game World Kit will provide inventory management, movement/locations, perception, and combat
+- **Game (2)**: Laws related to the specific game being built, e.g. "Taking a Cursed Item deals damage." This is where game devs will author any game logic that they want to add on top of functionality provided by World Kits.
+- **Instance (3)**: Laws related to a specific entity, attached via [Script](./world-kits.md#scripts), e.g., "Taking the Idol triggers the boulder trap." These Laws have the highest precedence.
 
-Layers alone are not enough to enable the engine to decide what order in which to run Laws. Many Laws will fall into the Domain layer. This is where matchers come in.
+Layers alone are not enough to enable the engine to decide what order in which to run Laws. Many Laws will fall into the Game layer. This is where matchers come in.
 
 #### Matchers
 Matchers are criteria which determine to what degree an intent is related to a Law. Each Law has an array of matchers, each representing some scenario that the Law cares about. These matchers are scored for each intent, and whatever matcher has the highest score is considered to be the Law's overall score (i.e. matcher scores are not added together).
@@ -104,7 +106,7 @@ matchers: [
 ],
 ```
 
-This way, `IgniteLaw` can express precisely when it applies to the incoming intent. If the actor is an entity with a flint in its main hand and it is targeting something flammable, or if it is a magic user and is casting a fire spell aimed at a flammable target, `IgniteLaw` wants to handle the intent. If the target is an NPC, and the actor is a character, `ComedyLaw` should take over. If the intent does in fact 
+This way, `IgniteLaw` can express precisely when it applies to the incoming intent. If the actor is an entity with a flint in its main hand and it is targeting something flammable, or if it is a magic user and is casting a fire spell aimed at a flammable target, `IgniteLaw` wants to handle the intent. If the target is an NPC, and the actor is a character, `ComedyLaw` should take over. If the intent does in fact
 
 
 

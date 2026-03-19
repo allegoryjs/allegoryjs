@@ -1,173 +1,9 @@
 import type ECS from './ecs'
 import type { EngineComponentSchema, Entity } from './ecs'
 import Emitter, { defaultEmitStreams, type EngineEvent } from './emitter'
+import { ContributionStatus, LawMutationOpType, type Contribution, type Intent, type IntentClassificationModule, type IntentPipelineConfig, type Law, type LawBid, type LawConcern, type LawContext, type MutationOp } from './intent-pipeline-types'
 import type LocalizationModule from './localization'
 
-export enum LawLayer {
-    /*********************
-     *** Engine Layers ***
-     *********************/
-    // built-in Laws, which typically handle basic functions (like saving) or
-    // indicating that the engine does not understand a command,
-    // and which are easily overwritten. Typically returns a COMPLETED in the contribution
-    Core = 0,
-
-
-    /***********************
-     *** Userland Layers ***
-     ***********************/
-
-    // laws related to the specific game being built
-    // (and/or laws coming from a World Kit). The default layer for new Laws created by game devs.
-    // e.g., "Taking a Cursed Item deals damage"
-    Domain = 1,
-
-    // Laws related to a specific entity, attached via Script
-    // e.g., "Taking the Idol triggers the boulder trap"
-    Instance = 2
-}
-
-enum ContributionStatus {
-    // a law added some flavor and/or added some proposed mutations, but
-    // isn't considering itself the final word; the Intent continues to propagate
-    pass = 'PASS',
-
-    // the Intent is determined to be impossible; roll back any queued changes and abort
-    rejected = 'REJECTED',
-
-    // the Intent has been fully handled; commit queued changes and stop propagation
-    completed = 'COMPLETED'
-}
-
-interface IntentPipelineConfig {
-    confidenceThreshold: 0.7
-    biddingIdMatchPrice: 100
-    biddingComponentMatchPrice: 10
-    biddingPropsMatchPrice: 20
-    biddingTagsMatchPrice: 2.5
-}
-
-interface Intent {
-    name: string
-    actor?: Entity
-    target?: Entity
-
-    // any tools or implements or other related entities
-    auxiliary?: Array<Entity>
-}
-
-interface IntentClassificationResponse {
-    intent?: Intent
-    confidence: number // normalized from 0 - 1
-    dryRun: boolean
-}
-
-
-interface LawContext {
-    actor?: Entity
-    target?: Entity
-    ecsUtils: ReturnType<InstanceType<typeof ECS>['getReadonlyFacade']>
-
-    // the list of auxiliaries (implements, tools, etc.) that the user
-    // issued the command with, sorted in the order that produces
-    // the highest specificity for the given Law (tie goes to user order)
-    auxiliary?: Entity[]
-
-    // the list of auxiliaries as they originally appeared in the
-    // user's command, in case the Law cares about the actual order
-    originalAuxiliaries?: Entity[]
-}
-
-type EntityRef = Entity | string
-
-export enum LawMutationOpType {
-    update = 'UPDATE',
-    set = 'SET',
-    remove = 'REMOVE',
-    destroy = 'DESTROY',
-    create = 'CREATE',
-}
-
-export type MutationOp<ComponentSchema extends EngineComponentSchema> =
-    | { op: LawMutationOpType.create,  alias?: string, components?: Partial<ComponentSchema & string>}
-    | { op: LawMutationOpType.remove,  entity: EntityRef, component: keyof ComponentSchema & string }
-    | { op: LawMutationOpType.update,  entity: EntityRef, component: keyof ComponentSchema & string, value: ComponentSchema[keyof ComponentSchema & string] } // Merges data
-    | { op: LawMutationOpType.set,     entity: EntityRef, component: keyof ComponentSchema & string, value: ComponentSchema[keyof ComponentSchema & string] } // Replaces data completely
-    | { op: LawMutationOpType.destroy, entity: EntityRef }
-
-interface Contribution<ComponentSchema extends EngineComponentSchema> {
-    status: ContributionStatus
-    mutations?: Array<MutationOp<ComponentSchema>>
-    narrations?: Array<string>
-    events?: Array<EngineEvent>
-}
-
-// expresses the criteria which constitute a scenario the Law is concerned with
-// e.g. if the entity has component ToolComponent and ToolComponent.type === 'wrench'
-interface LawConcern<ComponentSchema extends EngineComponentSchema> {
-    components?: Array<keyof ComponentSchema & string>
-    props?: Array<{
-        prop: string // strings must be in the format of ComponentName.propName or they are ignored
-        value: string | number | boolean // the value that counts as a match
-    }>
-    tags?: Array<string>
-    ids?: Array<string>
-}
-
-interface LawBid<ComponentSchema extends EngineComponentSchema> {
-    law: Law<ComponentSchema>;
-    score: number;
-    reorderedAuxiliaries?: Entity[]; // The data we want to save!
-}
-
-// a matcher represents a scenario that a Law cares about
-// e.g. the actor is the player, the target is an NPC, and the aux is a sword
-// the specificity of each concern in the matcher is added together,
-// then whatever matcher has the highest total specificity is treated
-// as the Law's specificity for a given Intent
-interface LawMatcher<ComponentSchema extends EngineComponentSchema> {
-    actor?: LawConcern<ComponentSchema>
-    target?: LawConcern<ComponentSchema>
-
-    // the criteria for matching auxiliary entities.
-    // for most games, these are implements or tools,
-    // e.g. "fix car with wrench and spark plug" ->
-    //      the 'auxiliary' field will contain something like
-    //      [{ tags: ['wrench']}, { tags: ['sparkplug'] }]
-    //      (and perhaps some component criteria too, like ToolComponent, etc)
-    auxiliary?: Array<LawConcern<ComponentSchema>>
-}
-
-interface Law<ComponentSchema extends EngineComponentSchema> {
-    layer: LawLayer
-    name: string
-    intents: Array<string> // an array of the intent names that the Law cares about
-    apply: (ctx: LawContext) => Promise<Contribution<ComponentSchema>>
-
-    /*
-    the scenarios that the Law cares about. Given a player Intent,
-    the matcher which scores highest on specificity is considered
-    to be the Law's specificity score for that Intent.
-    for example, say there is a Law called AssaultMagicLaw
-    which handles the casting of attack magic and this Law cares
-    about two scenarios:
-    - the actor entity has tag Magician
-    - the actor entity has ID sorcerer-king
-    and there is also a Law called MagicSuppressionLaw
-    which declares that a field suppresses the spells of any actor
-    with tag Magician and tag Vulnerable. If a normal magician
-    who is vulnerable tries to cast a spell, they should be silenced,
-    i.e. MagicSuppressionLaw should win the bid.
-    But if the Sorcerer King, who is immune to silencing, casts a spell,
-    AssaultMagicLaw should win the bid. So each matcher represents
-    a use case for the given law
-    */
-    matchers: Array<LawMatcher<ComponentSchema>>
-}
-
-interface IntentClassificationModule {
-    getIntentFromCommand: (command: string) => Promise<Array<IntentClassificationResponse>>
-}
 
 
 export default class IntentPipeline<
@@ -510,14 +346,6 @@ export default class IntentPipeline<
         }
     }
 
-    ratifyLaw(newLaw: Law<ComponentSchema>) {
-        this.#laws.set(newLaw.name, newLaw)
-    }
-
-    revokeLaw(name: string) {
-        this.#laws.delete(name)
-    }
-
     async #handleCommand(playerCommand: string) {
         const intentResponses = await this.#intentClassificationModule.getIntentFromCommand(playerCommand)
 
@@ -544,7 +372,7 @@ export default class IntentPipeline<
         for (let index = 0; index < intentResponses.length; index++) {
             const intentResponse = intentResponses[index];
 
-            if (!intentResponse || !intentResponse.intent) {
+            if (!intentResponse?.intent) {
                 // eztodo throw here?
                 console.warn('There was an issue accessing the intent response');
                 await this.#handleUnknownCommand();
@@ -605,5 +433,13 @@ export default class IntentPipeline<
             await this.#emitter.emit(event.type, event.payload)
         }
 
+    }
+
+    ratifyLaw(newLaw: Law<ComponentSchema>) {
+        this.#laws.set(newLaw.name, newLaw)
+    }
+
+    revokeLaw(name: string) {
+        this.#laws.delete(name)
     }
 }
