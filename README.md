@@ -28,7 +28,7 @@ It aims to bridge the gap between traditional parser games (Inform 7, TADS) and 
 
 ## Architecture
 
-AllegoryJS is built on a reactive, event-driven pipeline:
+Allegory.js is built on a reactive, event-driven pipeline:
 1.  **Input:** User text is routed via Semantic Embeddings to determine Intent.
 2.  **Logic:** "Laws" (Middleware) bid on intents based on specificity.
 3.  **Data:** A flat, relational ECS database manages the state.
@@ -93,7 +93,7 @@ We are currently building the foundation. If you are interested in the architect
 
 ## A Note on AI
 
-AllegoryJS uses AI to empower the player, not to replace the author.
+Allegory.js uses AI to empower the player, not to replace the author.
 
 - Understanding, Not Hallucinating: We use local AI models to parse user input (Natural Language Processing). This allows the player to type freely without guessing the exact verb syntax.
 
