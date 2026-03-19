@@ -3,19 +3,14 @@ import type { EngineComponentSchema, Entity } from './ecs'
 import Emitter, { defaultEmitStreams, type EngineEvent } from './emitter'
 import type LocalizationModule from './localization'
 
-enum LawLayer {
+export enum LawLayer {
     /*********************
      *** Engine Layers ***
      *********************/
-    // built-in laws, which typically handle basic functions (like saving) or
+    // built-in Laws, which typically handle basic functions (like saving) or
     // indicating that the engine does not understand a command,
     // and which are easily overwritten. Typically returns a COMPLETED in the contribution
     Core = 0,
-
-    // laws packaged with the engine that the dev may choose to use;
-    // readily relinquish control of Intents. Often returns a COMPLETED in the contribution
-    // e.g., "Take command moves item to inventory"
-    StdLib = 1,
 
 
     /***********************
@@ -23,13 +18,13 @@ enum LawLayer {
      ***********************/
 
     // laws related to the specific game being built
-    // (and/or laws coming from a genre template)
+    // (and/or laws coming from a World Kit). The default layer for new Laws created by game devs.
     // e.g., "Taking a Cursed Item deals damage"
-    Domain = 2,
+    Domain = 1,
 
-    // laws related to a specific entity, attached via Script
-    // e.g. e.g., "Taking the Idol triggers the boulder trap"
-    Instance = 3
+    // Laws related to a specific entity, attached via Script
+    // e.g., "Taking the Idol triggers the boulder trap"
+    Instance = 2
 }
 
 enum ContributionStatus {
@@ -106,6 +101,7 @@ interface Contribution<ComponentSchema extends EngineComponentSchema> {
     narrations?: Array<string>
     events?: Array<EngineEvent>
 }
+
 // expresses the criteria which constitute a scenario the Law is concerned with
 // e.g. if the entity has component ToolComponent and ToolComponent.type === 'wrench'
 interface LawConcern<ComponentSchema extends EngineComponentSchema> {

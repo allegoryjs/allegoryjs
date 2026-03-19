@@ -44,12 +44,73 @@ interface Law<ComponentSchema extends EngineComponentSchema> {
 
 Let's say we want to have a simple combat system. It could be implemented by `ratify`ing (i.e. registering within the intent pipeline) a Law called `CombatLaw`. `CombatLaw` states that it only knows how to handle intents with the name `'ATTACK'`. If the player says "eat the red apple", and the intent classification module outputs an intent like `name="EAT", actor={player ID}, target={apple instance ID}`, the intent pipeline looks for Laws that know how to handle `'EAT'`; `CombatLaw` does not know how to handle that, so it is skipped over and not invoked. However, if the player says "attack the goblin on the left", and the intent classification looks like `name="ATTACK", actor={player ID}, target={goblin ID}`, `CombatLaw` raises its hand and says, "pick me! I know how to handle `ATTACK`s!" In that case, the `apply` function of the Law is called, and the logic related to processing an attack runs.
 
-Simple enough, right? But what if there are two Laws that raise their hands? Maybe there is a Law called `SpiderSilkLaw`, which handles logic related to impeding the player's movements when they are wrapped up in the silk of a giant spider they are facing. When it's in effect, `SpiderSilkLaw` needs to be able to say, "hold on there, you need to make a strength roll to see if you can attack". How can we determine that `SpiderSilkLaw` needs to run before `CombatLaw`? Well, our first line of defense is the `layer` property. eztodo resume here
+Simple enough. But what if there are two Laws that raise their hands? Maybe there is a Law called `SpiderSilkLaw`, which handles logic related to impeding the player's movements when they are wrapped up in the silk of a giant spider they are facing. When it's in effect, `SpiderSilkLaw` needs to be able to say, "hold on there, you need to make a strength roll to see if you can attack". How can we determine that `SpiderSilkLaw` needs to run before `CombatLaw`? This is where Law **specificity** comes in.
+
+### Specificity
+The system of Law specificity is inspired by CSS. In CSS, the selector which is the most specific about which element it styles takes precedence. It's the same here. Specificity in the Allegory engine is represented as a tuple of `[layer, matcher]`.
+
+#### Layers
+Let's look at the `LawLayer` interface:
+
+```ts
+export enum LawLayer {
+    /*********************
+     *** Engine Layers ***
+     *********************/
+
+    Core = 0,
+
+    /***********************
+     *** Userland Layers ***
+     ***********************/
+
+    Domain = 1,
+    Instance = 2
+}
+```
+
+Each layer represents a classification of Law. This helps eliminate conflicts and reduce logical overhead with *specificity*, which we will talk about later. Here's what each layer is for:
+- **Core (0)**: built-in Laws, which typically handle basic functions (like saving) or fall-through cases indicating that the engine does not understand a command, and which are easily overwritten. These Laws have very low precedence. Developers won't need to add Laws in this layer unless they are trying to modify fundamental engine behavior.
+- **Domain (1)**: Laws related to the specific game being built, and/or Laws coming from a World Kit, e.g. "Taking a Cursed Item deals damage." This is where game devs will author any game logic that they want to add on top of functionality provided by World Kits.
+- **Instance (2)**: Laws related to a specific entity, attached via [Script](./world-kits.md#scripts), e.g., "Taking the Idol triggers the boulder trap." These Laws have the highest precedence.
+
+Layers alone are not enough to enable the engine to decide what order in which to run Laws. Many Laws will fall into the Domain layer. This is where matchers come in.
+
+#### Matchers
+Matchers are criteria which determine to what degree an intent is related to a Law. Each Law has an array of matchers, each representing some scenario that the Law cares about. These matchers are scored for each intent, and whatever matcher has the highest score is considered to be the Law's overall score (i.e. matcher scores are not added together).
+
+At the core of matchers is the concept of **concerns**. A concern can be applied to an **actor**, a **target**, or **auxiliary implement(s)**. The Law declares inside of a concern what **components**, **props**, **tags**, and/or **ids** it cares about. For example, perhaps a Law only cares about an intent when the ID of the actor is `player` and the entity with that ID has the component `SanityComponent`. Or maybe a Law cares about any entity with the tag `aflame`. Each type of constraint has a different weight, which defaults to:
+- **component** matches: 10 points
+- **prop** (i.e. component data value) matches: 20 points
+- **tags** matches: 2.5 points
+- **ID** matches: 100 points
+
+So, let's say we have a Law called `IgniteLaw`. It declares that it can handle the intents `'LIGHT'`, `'BURN'`, and `'IGNITE'`. To determine if it should be chosen over `ComedyLaw`, which also handles `'BURN'` (as in, a verbal dig), to handle the intent (in the case of an ambiguous/overloaded intent name), it declares the following matchers:
+
+
+```js
+matchers: [
+    // Scenario 1: The Mundane Way (Needs a tool)
+    {
+        actor: { props: [{ prop: 'Equipment.mainHand', value: 'flint' }] },
+        target: { tags: ['flammable'] }
+    },
+
+    // Scenario 2: The Magic Way (Needs a skill)
+    {
+        actor: { components: ['FireMagicSkill'] },
+        target: { tags: ['flammable'] }
+    }
+],
+```
+
+This way, `IgniteLaw` can express precisely when it applies to the incoming intent. If the actor is an entity with a flint in its main hand and it is targeting something flammable, or if it is a magic user and is casting a fire spell aimed at a flammable target, `IgniteLaw` wants to handle the intent. If the target is an NPC, and the actor is a character, `ComedyLaw` should take over. If the intent does in fact 
 
 
 
 
+--- TODO (temp) ---
 
-
+Talk about COMPLETED, PASS, and REJECTED
 
 While all intents are valid structurally, they may not always be valid logically.
