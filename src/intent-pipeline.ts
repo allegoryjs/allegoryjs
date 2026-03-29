@@ -217,11 +217,13 @@ export default class IntentPipeline<
         return highestScoringBid
     }
 
-    async #auctionIntent(intent: Intent): Promise<Array<Contribution<ComponentSchema>>> {
+    async #auctionIntent(intent: Intent, dryRun: boolean): Promise<Array<Contribution<ComponentSchema>>> {
         // the list of all valid bids sorted in descending order of score
         const bids = this.#lawList
-            .filter(law => law.intents.includes(intent.name))
             .flatMap(law => {
+                if (!law.intents.includes(intent.name)) {
+                    return []
+                }
                 const bid = this.#calculateBid(law, intent)
 
                 return bid ? [bid] : []
@@ -243,6 +245,7 @@ export default class IntentPipeline<
                 auxiliary: reorderedAuxiliaries,
                 originalAuxiliaries: intent.auxiliary,
                 ecsUtils: this.#ecs.getReadonlyFacade(),
+                dryRun,
             }
 
             const result = await law.apply(lawCtx)
@@ -356,36 +359,33 @@ export default class IntentPipeline<
         }
 
         const allIntentsAreValid = intentResponses.every(
-            ({ confidence }) => confidence >= this.#config.confidenceThreshold
+            ({ confidence, intent }) => confidence >= this.#config.confidenceThreshold && !!intent
         )
 
         if (!allIntentsAreValid) {
-            console.info('At least one intent is invalid')
+            console.debug('At least one intent extracted from the user\'s input is not valid')
             await this.#handleUnknownCommand()
             return
         }
 
-        let isDryRun = false
+        let dryRun = false
         let rollback = false
         const contributionStack: Array<Contribution<ComponentSchema>> = []
 
         for (let index = 0; index < intentResponses.length; index++) {
-            const intentResponse = intentResponses[index];
+            const intentResponse = intentResponses[index]
 
             if (!intentResponse?.intent) {
-                // eztodo throw here?
-                console.warn('There was an issue accessing the intent response');
-                await this.#handleUnknownCommand();
-                return;
+                throw new Error('Intent response does not contain a valid intent')
             }
 
-            const { intent, dryRun } = intentResponse;
+            const { intent, dryRun: responseDryRun } = intentResponse
 
-            if (dryRun) {
-                isDryRun = true
+            if (responseDryRun) {
+                dryRun = true
             }
 
-            const tempContributions = await this.#auctionIntent(intent)
+            const tempContributions = await this.#auctionIntent(intent, dryRun)
             if (tempContributions.some(c => c.status === ContributionStatus.rejected)) {
                 rollback = true
                 break
@@ -394,6 +394,10 @@ export default class IntentPipeline<
         }
 
         // eztodo handle dry run
+
+        if (dryRun) {
+
+        }
 
         if (rollback) {
             await this.#handleUnknownCommand() // eztodo add more appropriate handler

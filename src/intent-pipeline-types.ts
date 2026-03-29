@@ -76,6 +76,7 @@ export interface IntentClassificationResponse {
 
 
 export interface LawContext {
+    dryRun: boolean
     actor?: Entity
     target?: Entity
     ecsUtils: ReturnType<InstanceType<typeof ECS>['getReadonlyFacade']>
