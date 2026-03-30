@@ -1,7 +1,23 @@
 import type ECS from './ecs'
 import type { EngineComponentSchema, Entity } from './ecs'
 import Emitter, { defaultEmitStreams, type EngineEvent } from './emitter'
-import { ContributionStatus, LawMutationOpType, type Contribution, type Intent, type IntentClassificationModule, type IntentPipelineConfig, type Law, type LawBid, type LawConcern, type LawContext, type MutationOp } from './intent-pipeline-types'
+import {
+    ContributionStatus,
+    ERR_INTENT_REJECTED,
+    LawMutationOpType,
+ } from './intent-pipeline-types'
+
+ import type {
+    Contribution,
+    Intent,
+    IntentClassificationModule,
+    IntentPipelineConfig,
+    Law,
+    LawBid,
+    LawConcern,
+    LawContext,
+    MutationOp,
+ } from './intent-pipeline-types'
 import type LocalizationModule from './localization'
 
 
@@ -349,60 +365,16 @@ export default class IntentPipeline<
         }
     }
 
-    async #handleCommand(playerCommand: string) {
-        const intentResponses = await this.#intentClassificationModule.getIntentFromCommand(playerCommand)
-
-        if (!intentResponses.length) {
-            await this.#handleUnknownCommand()
-
-            return
-        }
-
-        const allIntentsAreValid = intentResponses.every(
-            ({ confidence, intent }) => confidence >= this.#config.confidenceThreshold && !!intent
-        )
-
-        if (!allIntentsAreValid) {
-            console.debug('At least one intent extracted from the user\'s input is not valid')
-            await this.#handleUnknownCommand()
-            return
-        }
-
-        let dryRun = false
-        let rollback = false
+    async #handleIntent(intent: Intent, dryRun: boolean) {
         const contributionStack: Array<Contribution<ComponentSchema>> = []
 
-        for (let index = 0; index < intentResponses.length; index++) {
-            const intentResponse = intentResponses[index]
+        const tempContributions = await this.#auctionIntent(intent, dryRun)
 
-            if (!intentResponse?.intent) {
-                throw new Error('Intent response does not contain a valid intent')
-            }
-
-            const { intent, dryRun: responseDryRun } = intentResponse
-
-            if (responseDryRun) {
-                dryRun = true
-            }
-
-            const tempContributions = await this.#auctionIntent(intent, dryRun)
-            if (tempContributions.some(c => c.status === ContributionStatus.rejected)) {
-                rollback = true
-                break
-            }
-            contributionStack.push(...tempContributions)
+        if (tempContributions.some(c => c.status === ContributionStatus.rejected)) {
+            throw new Error(ERR_INTENT_REJECTED)
         }
 
-        // eztodo handle dry run
-
-        if (dryRun) {
-
-        }
-
-        if (rollback) {
-            await this.#handleUnknownCommand() // eztodo add more appropriate handler
-            return
-        }
+        contributionStack.push(...tempContributions)
 
         const mutations: Array<MutationOp<ComponentSchema>> = []
         const narrations: Array<string> = []
@@ -436,14 +408,57 @@ export default class IntentPipeline<
         for (const event of events) {
             await this.#emitter.emit(event.type, event.payload)
         }
-
     }
 
-    ratifyLaw(newLaw: Law<ComponentSchema>) {
+
+
+    public async handleCommand(playerCommand: string) {
+        const intentResponses = await this.#intentClassificationModule.getIntentFromCommand(playerCommand)
+
+        if (!intentResponses.length) {
+            await this.#handleUnknownCommand()
+
+            return
+        }
+
+        const allIntentsAreValid = intentResponses.every(
+            ({ confidence, intent }) =>
+                confidence >= this.#config.confidenceThreshold &&
+                !!intent
+        )
+
+        if (!allIntentsAreValid) {
+            console.debug('At least one intent extracted from the user\'s input is not valid')
+            await this.#handleUnknownCommand()
+            return
+        }
+
+        for (let index = 0; index < intentResponses.length; index++) {
+            const intentResponse = intentResponses[index]
+
+            if (!intentResponse?.intent) {
+                throw new Error('Intent response does not contain a valid intent')
+            }
+
+            const { intent, dryRun } = intentResponse
+
+            try {
+                await this.#handleIntent(intent, dryRun)
+            } catch(e) {
+                if (e instanceof Error && e.message === ERR_INTENT_REJECTED) {
+                    break
+                } else {
+                    throw e
+                }
+            }
+        }
+    }
+
+    public ratifyLaw(newLaw: Law<ComponentSchema>) {
         this.#laws.set(newLaw.name, newLaw)
     }
 
-    revokeLaw(name: string) {
+    public revokeLaw(name: string) {
         this.#laws.delete(name)
     }
 }

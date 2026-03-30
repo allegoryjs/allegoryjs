@@ -2,6 +2,8 @@ import type ECS from './ecs'
 import type { EngineComponentSchema, Entity } from './ecs'
 import type { EngineEvent } from './emitter'
 
+export const ERR_INTENT_REJECTED = 'intent-rejected'
+
 export enum LawLayer {
     /*********************
      *** Engine Layers ***
