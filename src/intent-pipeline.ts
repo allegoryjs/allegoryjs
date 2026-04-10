@@ -410,8 +410,6 @@ export default class IntentPipeline<
         }
     }
 
-
-
     public async handleCommand(playerCommand: string) {
         const intentResponses = await this.#intentClassificationModule.getIntentFromCommand(playerCommand)
 
