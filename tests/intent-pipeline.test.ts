@@ -9,11 +9,13 @@ import {
 } from 'bun:test'
 
 import IntentPipeline from '../src/intent-pipeline'
-import type { IntentClassificationModule, IntentPipelineConfig } from '../src/intent-pipeline-types'
+import { ContributionStatus, LawLayer, type IntentClassificationModule, type IntentPipelineConfig, type Law } from '../src/intent-pipeline-types'
 import type Emitter from '../src/emitter'
 import type LocalizationModule from '../src/localization'
 import type ECS from '../src/ecs'
 import { defaultEmitStreams } from '../src/emitter'
+import type { EngineComponentSchema } from '../src/ecs'
+import { DefaultLogger, type Logger } from '../src/logger'
 
 describe('Intent Pipeline', () => {
     const mockEmitter = {
@@ -50,7 +52,15 @@ describe('Intent Pipeline', () => {
         getIntentFromCommand: mock()
     } satisfies IntentClassificationModule
 
+    const logger: Logger = new DefaultLogger({
+        info: true,
+        debug: true,
+        error: true,
+        warn: true,
+    })
+
     let ip: IntentPipeline
+
 
     beforeEach(() => {
         ip = new IntentPipeline(
@@ -59,6 +69,7 @@ describe('Intent Pipeline', () => {
             mockIntentClassificationModule,
             mockI18n,
             mockConfigDefault,
+            logger,
         )
     })
 
@@ -136,11 +147,39 @@ describe('Intent Pipeline', () => {
     })
 
     describe('handles valid commands correctly', () => {
-        it('throws when there is an error while handling an intent', async () => {
-           
-        })
+        it('invokes the correct Law for a given command', async () => {
+            const intentName = 'TEST_INTENT'
+            const actorEntityId = 'fake_actor_entity'
+            const lawApplyMock = mock()
 
-        it('stops execution if an intent is rejected', async () => {
+            lawApplyMock.mockImplementationOnce(() => ({
+                status: ContributionStatus.pass
+            }))
+
+            // register a Law which handles TEST_INTENT
+            const testLaw: Law<EngineComponentSchema> = {
+                layer: LawLayer.Core,
+                name: 'test-law',
+                intents: [intentName],
+                apply: lawApplyMock,
+                matchers: [{
+                    actor: {
+                        ids: [actorEntityId]
+                    }
+                }]
+            }
+
+            ip.ratifyLaw(testLaw)
+
+            mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [{
+                confidence: 1,
+                name: intentName,
+                actor: actorEntityId,
+            }])
+
+            await ip.handleCommand('test command')
+
+            expect(lawApplyMock).toHaveBeenCalledTimes(1)
 
         })
     })

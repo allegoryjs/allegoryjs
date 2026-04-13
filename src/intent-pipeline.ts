@@ -19,6 +19,7 @@ import {
     MutationOp,
  } from './intent-pipeline-types'
 import type LocalizationModule from './localization'
+import { DefaultLogger, type Logger } from './logger'
 
 
 
@@ -31,13 +32,15 @@ export default class IntentPipeline<
     #t: (slug: string) => string
     #laws: Map<string, Law<ComponentSchema>>
     #ecs: ECS<ComponentSchema>
+    #logger: Logger
 
     constructor(
         emitter: Emitter,
         ecs: ECS<ComponentSchema>,
         intentClassificationModule: IntentClassificationModule,
         localizationModule: LocalizationModule,
-        config: IntentPipelineConfig
+        config: IntentPipelineConfig,
+        logger?: Logger,
     ) {
         this.#emitter = emitter
         this.#ecs = ecs
@@ -45,6 +48,7 @@ export default class IntentPipeline<
         this.#t = localizationModule.$t
         this.#intentClassificationModule = intentClassificationModule
         this.#laws = new Map()
+        this.#logger = logger ?? new DefaultLogger()
     }
 
     get #lawList() {
@@ -52,6 +56,7 @@ export default class IntentPipeline<
     }
 
     async #handleUnknownCommand() {
+        this.#logger.debug('issued command is unknown; emitting unknown command narration event')
         await this.#emitter.emit(defaultEmitStreams.narrate, [
             this.#t('engine.unknown_command')
         ])
@@ -61,26 +66,35 @@ export default class IntentPipeline<
         entity: Entity,
         concern: LawConcern<ComponentSchema>,
     ) {
+        this.#logger.debug(`Calculating concern specificity for entity ${entity} and concern ${JSON.stringify(concern)}`)
+
         const idScore = concern?.ids?.reduce((acc, id) => {
             return this.#ecs.getEntityByPrettyId(id) === entity ?
                 acc + this.#config.biddingIdMatchPrice :
                 acc
         }, 0) ?? 0
 
+        this.#logger.debug(`Concern has an ID score of ${idScore}`)
+
         if (concern.ids && idScore === 0) {
+            this.#logger.debug(`Entity ${entity} does not have any of the concern's listed IDs; returning -1 for specificity`)
             return -1
         }
 
         const componentScore = concern?.components?.reduce((acc, component) => {
                 const entityHasComponent = this.#ecs.entityHasComponent(entity, component)
                 if (entityHasComponent) {
+                    this.#logger.debug(`Entity ${entity} has component ${component}; incrementing concern component score by ${this.#config.biddingComponentMatchPrice}`)
                     return acc + this.#config.biddingComponentMatchPrice
                 }
 
                 return acc
         }, 0) ?? 0
 
+        this.#logger.debug(`Concern has a total component specificity score of ${componentScore}`)
+
         if (concern?.components?.length && componentScore === 0) {
+            this.#logger.debug(`Entity ${entity} does not match any of the concern's listed components; returning -1 for specificity`)
             return -1
         }
 
@@ -88,16 +102,19 @@ export default class IntentPipeline<
             prop,
             value
         }) => {
+            this.#logger.debug(`Checking concern prop score for prop ${prop} against value ${value}`)
             const [componentName = '', property = ''] = prop.split('.')
 
             if (![componentName, property].every(str => !!str)) {
-                console.warn('Invalid property matcher. Property matchers must be in the format of "ComponentName.propName"')
-                return acc
+                const err = 'Invalid property matcher. Property matchers must be in the format of "ComponentName.propName"'
+                this.#logger.error(err)
+                throw new Error(err)
             }
 
             if (!this.#ecs.isComponent(componentName)) {
-                console.warn(`Property matchers must be valid components (received ${componentName})`)
-                return acc
+                const err = `Property matchers must be valid components (received ${componentName})`
+                this.#logger.error(err)
+                throw new Error(err)
             }
 
             const componentData = this.#ecs.getEntityComponentData(entity, componentName)
@@ -107,9 +124,11 @@ export default class IntentPipeline<
                 !(property in componentData) ||
                 componentData[property as keyof typeof componentData] !== value
             ) {
+                this.#logger.debug(`No prop match for entity ${entity} for ${prop} with value ${value}`)
                 return acc
             }
 
+            this.#logger.debug(`Entity ${entity} matches prop ${prop} with value ${value}; adding ${this.#config.biddingPropsMatchPrice} to concern prop score accumulator`)
             return acc + this.#config.biddingPropsMatchPrice
         }, 0) ?? 0
 
@@ -118,20 +137,28 @@ export default class IntentPipeline<
         }
 
         const tagsScore = concern?.tags?.reduce((acc, tag) => {
+            this.#logger.debug(`Checking concern for match with tag ${tag}`)
+
             if (this.#ecs.entityHasTag(entity, tag)) {
+                this.#logger.debug(`Entity ${entity} has tag ${tag}; adding ${this.#config.biddingTagsMatchPrice} to concern tag score accumulator`)
                 return acc + this.#config.biddingTagsMatchPrice
             }
             return acc
         }, 0) ?? 0
 
         if (concern?.tags?.length && tagsScore === 0) {
+            this.#logger.debug(`Entity ${entity} does not have any of the listed tags; returning -1 for concern specificity score`)
             return -1
         }
 
-        return componentScore +
+        const totalScore = componentScore +
             propsScore +
             tagsScore +
             idScore
+
+        this.#logger.debug(`Total concern specificity: ${totalScore}`)
+
+        return totalScore
     }
 
     // returns the specificity of the highest scoring matched scenario
@@ -143,7 +170,11 @@ export default class IntentPipeline<
             auxiliary
         } = intent
 
+        this.#logger.info(`Calculating bid for Law ${law.name} for intent ${name}`)
+        this.#logger.debug(`Intent name: ${name}, actor: ${actor}, target: ${target}, auxiliary(s): ${auxiliary?.join(', ')}`)
+
         if (!law.intents.includes(name)) {
+            this.#logger.debug(`Law ${law.name} does not handle intents of type ${name}`)
             return null
         }
 
@@ -153,9 +184,15 @@ export default class IntentPipeline<
             actor: actorConcern,
             target: targetConcern,
             auxiliary: auxConcerns
-        }) => {
+        }, index) => {
+            this.#logger.debug(`Checking matcher ${index} for Law ${law.name}`)
+
             const actorScore = actor && actorConcern ? this.#calculateConcernSpecificity(actor, actorConcern) : 0
+            this.#logger.debug(`Actor score: ${actorScore}`)
+
             const targetScore = target && targetConcern ? this.#calculateConcernSpecificity(target, targetConcern) : 0
+            this.#logger.debug(`Target score: ${targetScore}`)
+
 
             // to find the correct score for auxiliary entities, we need to look at all
             // permutations of aux entity order, and compare each of their scores, and
@@ -172,6 +209,7 @@ export default class IntentPipeline<
             // the Law is invoked with the original ordering alongside the reordered list in the ctx
             let highestScoreAuxPermutation = auxiliary
             const auxiliaryScore = !(auxConcerns?.length && auxiliary?.length) ? 0 : (() => {
+                this.#logger.debug('Calculating auxiliary score for law matcher')
                 type PermutationIndex = number
                 type Score = number
                 const scoreMap = new Map<PermutationIndex, Score>()
@@ -190,6 +228,12 @@ export default class IntentPipeline<
                     permutations = temp
                 }
 
+                this.#logger.debug(`All aux permutations: ${
+                    permutations.map((permutation => {
+                        return permutation.join(', ')
+                    })).join('\n')
+                }`)
+
                 permutations.forEach((permutation, permutationIndex) => {
                     let permutationScore = 0
 
@@ -198,6 +242,8 @@ export default class IntentPipeline<
                             permutationScore += this.#calculateConcernSpecificity(permutation[concernIndex], auxConcern)
                         }
                     }
+
+                    this.#logger.debug(`Permutation ${permutationIndex} (${permutation.join(', ')}) has a total score of ${permutationScore}`)
 
                     scoreMap.set(permutationIndex, permutationScore)
                 })
@@ -211,15 +257,22 @@ export default class IntentPipeline<
                     }
                 })
 
+
+
                 highestScoreAuxPermutation = permutations[highestScoringPermutationIndex]
+
+                this.#logger.debug(`Highest scoring permutation: ${highestScoreAuxPermutation?.join(', ') ?? 'undefined'} with a score of ${highScore}`)
+
                 return highScore
             })()
 
             if ([actorScore, targetScore, auxiliaryScore].some(score => score < 0)) {
+                this.#logger.debug('No match for current matcher')
                 return
             }
 
             const totalScore = actorScore + targetScore + auxiliaryScore
+            this.#logger.debug(`Score for current matcher: ${totalScore}`)
 
             if (!highestScoringBid || totalScore > highestScoringBid.score) {
                 highestScoringBid = {
@@ -230,6 +283,7 @@ export default class IntentPipeline<
             }
         })
 
+        this.#logger.info(`Bid for Law ${law.name} for intent ${name}: highestScoringBid`)
         return highestScoringBid
     }
 
@@ -426,7 +480,7 @@ export default class IntentPipeline<
         )
 
         if (!allIntentsAreValid) {
-            console.debug('At least one intent extracted from the user\'s input is not valid')
+            this.#logger.debug('At least one intent extracted from the user\'s input is not valid')
             await this.#handleUnknownCommand()
             return
         }
