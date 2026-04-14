@@ -469,6 +469,7 @@ export default class IntentPipeline<
         const tempContributions = await this.#auctionIntent(intent, dryRun)
 
         if (tempContributions.some(c => c.status === ContributionStatus.rejected)) {
+            this.#logger.warn(`Intent ${intent.name} rejected`)
             throw new Error(ERR_INTENT_REJECTED)
         }
 
@@ -483,14 +484,20 @@ export default class IntentPipeline<
                 // throws if a mutation is invalid
                 this.#validateMutations(contribution.mutations)
 
+                this.#logger.debug(`${contribution?.mutations?.length} mutation contribution(s) added to stack`)
+
                 mutations.push(...contribution.mutations)
             }
 
             if (contribution?.narrations?.length) {
+                this.#logger.debug(`${contribution?.narrations?.length} narration contribution(s) added to stack`)
+
                 narrations.push(...contribution.narrations)
             }
 
             if (contribution?.events?.length) {
+                this.#logger.debug(`${contribution?.events?.length} event contribution(s) added to stack`)
+
                 events.push(...contribution.events)
             }
         }
@@ -504,6 +511,8 @@ export default class IntentPipeline<
         }
 
         for (const event of events) {
+            this.#logger.debug(`Emitting event of type ${event.type}`)
+
             await this.#emitter.emit(event.type, event.payload)
         }
     }
@@ -513,7 +522,6 @@ export default class IntentPipeline<
 
         if (!intentResponses.length) {
             await this.#handleUnknownCommand()
-
             return
         }
 
@@ -533,7 +541,10 @@ export default class IntentPipeline<
             const intentResponse = intentResponses[index]
 
             if (!intentResponse?.intent) {
-                throw new Error('Intent response does not contain a valid intent')
+                const err = 'Intent response does not contain a valid intent'
+
+                this.#logger.error(err)
+                throw new Error(err)
             }
 
             const { intent, dryRun } = intentResponse
@@ -542,6 +553,7 @@ export default class IntentPipeline<
                 await this.#handleIntent(intent, dryRun)
             } catch(e) {
                 if (e instanceof Error && e.message === ERR_INTENT_REJECTED) {
+                    this.#logger.warn('Intent rejected; stopping intent handling loop')
                     break
                 } else {
                     throw e
@@ -551,10 +563,26 @@ export default class IntentPipeline<
     }
 
     public ratifyLaw(newLaw: Law<ComponentSchema>) {
+        if (this.#laws.has(newLaw.name)) {
+            const err = `Error ratifying Law ${newLaw.name}; a Law with this name is already registered`
+
+            this.#logger.error(err)
+            throw new Error(err)
+        }
+
+        this.#logger.info(`Ratifying new law ${newLaw.name}`)
         this.#laws.set(newLaw.name, newLaw)
     }
 
-    public revokeLaw(name: string) {
+    public repealLaw(name: string) {
+        if (!this.#laws.has(name)) {
+            const err = `Error repealing Law ${name}; no Law with this name is registered`
+
+            this.#logger.error(err)
+            throw new Error(err)
+        }
+
+        this.#logger.info(`Repealing Law ${name}`)
         this.#laws.delete(name)
     }
 }

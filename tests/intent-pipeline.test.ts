@@ -81,7 +81,7 @@ describe('Intent Pipeline', () => {
     it('has the expected public methods', () => {
         expect(typeof ip.handleCommand).toBe('function')
         expect(typeof ip.ratifyLaw).toBe('function')
-        expect(typeof ip.revokeLaw).toBe('function')
+        expect(typeof ip.repealLaw).toBe('function')
     })
 
     describe('handles invalid commands correctly', () => {
