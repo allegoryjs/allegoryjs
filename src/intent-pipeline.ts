@@ -288,6 +288,7 @@ export default class IntentPipeline<
     }
 
     async #auctionIntent(intent: Intent, dryRun: boolean): Promise<Array<Contribution<ComponentSchema>>> {
+        this.#logger.info(`Beginning auction for intent ${intent.name}; dry run = ${dryRun}`)
         // the list of all valid bids sorted in descending order of score
         const bids = this.#lawList
             .flatMap(law => {
@@ -305,10 +306,23 @@ export default class IntentPipeline<
                 return bidB.score - bidA.score;
             })
 
+        this.#logger.debug(`Ordered bids (highest bid first): ${
+            bids.map(bid => bid.law.name).join(', ')
+        }`)
+
         const contributions: Array<Contribution<ComponentSchema>> = []
 
         for (const bid of bids) {
             const { law, reorderedAuxiliaries } = bid
+
+            if (reorderedAuxiliaries && intent.auxiliary) {
+                this.#logger.debug(`Auxiliary implements reordered. Old order:\n${
+                    intent.auxiliary.join(', ')
+                }\nNew order:\n${
+                    reorderedAuxiliaries.join(', ')
+                }`)
+            }
+
             const lawCtx: LawContext = {
                 actor: intent.actor,
                 target: intent.target,
@@ -321,12 +335,14 @@ export default class IntentPipeline<
             const result = await law.apply(lawCtx)
 
             if (result.status === ContributionStatus.rejected) {
+                this.#logger.info('Intent rejected')
                 return []
             }
 
             contributions.push(result)
 
             if (result.status === ContributionStatus.completed) {
+                this.#logger.info('Intent completed; stopping Law execution loop')
                 break
             }
         }
@@ -340,7 +356,7 @@ export default class IntentPipeline<
         // e.g. let's say a Law wants to spawn a goblin, then insert him into
         //      an ongoing combat encounter. The Law won't have a reference for the
         //      goblin entity ID when it declares the second mutation operation,
-        //      because entities aren't created until after all laws put their mutation
+        //      because entities aren't created until after all Laws put their mutation
         //      requests on the stack. So the Law adds an UPDATE mutation op referencing the
         //      entity "goblin_05" *after* it adds a CREATE op with ID = "goblin_05".
         //      so this map resolves an alias to a real entity ID. Note that the alias
@@ -359,11 +375,14 @@ export default class IntentPipeline<
 
         for (const mutation of mutations) {
             if (mutation.op === LawMutationOpType.create && mutation.alias) {
+                this.#logger.debug(`Adding future alias "${mutation.alias}"`)
                 futureAliases.add(mutation.alias)
             } else if (mutation.op !== LawMutationOpType.create) {
                 // if the entity identifier is a string, it is an alias
                 if (typeof mutation.entity === 'string' && !futureAliases.has(mutation.entity)) {
-                        throw new Error(`Critical logic error: Law mutation operation referenced unknown alias '${mutation.entity}'. Mutations may have been declared out of order; an entity with an alias must be CREATE-ed before it is referenced by a mutation operation.`)
+                    const err = `Critical logic error: Law mutation operation referenced unknown alias '${mutation.entity}'. Mutations may have been declared out of order; an entity with an alias must be CREATE-ed before it is referenced by a mutation operation.`
+                    this.#logger.error(err)
+                    throw new Error(err)
                 }
             }
         }
@@ -372,35 +391,58 @@ export default class IntentPipeline<
     #applyMutation(mutation: MutationOp<ComponentSchema>, aliasMap: Map<string, Entity>) {
         if (mutation.op === LawMutationOpType.create) {
             const entityID = this.#ecs.createEntity(mutation.alias)
+            this.#logger.debug(`New entity created: ${entityID}`)
+
             if (mutation.alias) {
+                this.#logger.debug(`Setting alias ${mutation.alias} for new entity ${entityID}`)
                 aliasMap.set(mutation.alias, entityID)
             }
+
             return
         }
 
+        let entity: Entity
+
         // remember that entity ECS IDs are numbers;
         // aliases are strings which will be set as the Meta IDs of new entities when the mutation stack is executed
-        const entity = typeof mutation.entity === 'string' ?
-            aliasMap.get(mutation.entity) :
-            mutation.entity
+        if (typeof mutation.entity === 'string') {
+            if (aliasMap.has(mutation.entity)) {
+                entity = aliasMap.get(mutation.entity)!
+            } else {
+                const err = `Critical logic error: attempting to use nonexistent entity with alias ${mutation.entity}`
+                this.#logger.error(err)
+                throw new Error(err)
+            }
+        } else {
+            entity = mutation.entity
+        }
 
         if (typeof entity === 'undefined') {
             // the alias is checked for validity before we reach this step
             // so if this occurs, it is likely an engine bug
-            throw new Error(`Invalid alias ${mutation.entity} referenced in mutation op`)
+            const err = `Invalid alias ${mutation.entity} referenced in mutation op`
+
+            this.#logger.error(err)
+            throw new Error(err)
         }
 
         if (mutation.op === LawMutationOpType.remove) {
+            this.#logger.debug(`Removing component ${mutation.component} from entity ${entity}`)
+
             this.#ecs.removeComponentFromEntity(entity, mutation.component)
             return
         }
 
         if (mutation.op === LawMutationOpType.destroy) {
+            this.#logger.debug(`Destroying entity ${entity}`)
+
             this.#ecs.destroyEntity(entity)
             return
         }
 
         if (mutation.op === LawMutationOpType.set) {
+            this.#logger.debug(`Setting component data for ${mutation.component} on entity ${entity}:\n${JSON.stringify(mutation.value)}`)
+
             this.#ecs.setComponentOnEntity(
                 entity,
                 mutation.component as keyof ComponentSchema & string,
@@ -410,6 +452,8 @@ export default class IntentPipeline<
         }
 
         if (mutation.op === LawMutationOpType.update) {
+            this.#logger.debug(`Updating component data for ${mutation.component} on entity ${entity}:\n${JSON.stringify(mutation.value)}`)
+
             this.#ecs.updateComponentData(
                 entity,
                 mutation.component as keyof ComponentSchema & string,
