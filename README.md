@@ -43,24 +43,24 @@ gantt
     title Allegory.js Development Roadmap
     dateFormat  YYYY-MM-DD
     axisFormat  %b %d
-    
+
     section Phase 1: The Kernel
     Ideation & Architecture           :done,    p1_1, 2026-01-01, 14d
     Core ECS Implementation           :done,    p1_2, after p1_1, 60d
-    Intent Pipeline (Bidding/Sorting) :active,  p1_3, 2026-03-01, 30d
-    Mutation Executor & Rollbacks     :active,   p1_4, 2026-03-12, 10d
+    Intent Pipeline (Bidding/Sorting) :active,  p1_3, 2026-03-01, 90d
+    Mutation Executor & Rollbacks     :active,  p1_4, 2026-03-12, 35d
     Event Bus & Pub/Sub               :         p1_5, after p1_4, 12d
-    
+
     section Phase 2: NLP & Input
     Language Profile & Splitter       :         p2_1, after p1_5, 30d
     Integrate Transformers.js (WASM)  :         p2_2, after p2_1, 14d
     Vector Similarity Search          :         p2_3, after p2_2, 21d
     Salience System (Context Cache)   :         p2_4, after p2_3, 7d
-    
+
     section Phase 3: The API
     Blueprint Registry (Deferred)     :         p3_1, after p2_4, 7d
     TypeScript Schema Inference       :         p3_2, after p3_1, 14d
-    
+
     section Phase 4: Adventure Game Worldkit
     Fluent Builder (ThereIsA...)      :         p4_0, after p3_2, 30d
     Base Components (Location, etc.)  :         p4_1, after p4_0, 7d
@@ -74,11 +74,11 @@ gantt
     LLM Synonym Generator (Cloud API) :         t2, after t1, 14d
     Vector Packer (.bin Output)       :         t3, after t2, 7d
     Engine Runtime Index Loader       :         t4, after t3, 5d
-    
+
     section Phase 6: Validation
     "Cyberpunk Saloon" Demo (WIP)     :         p5_1, after t4, 21d
     Bug Fixes & Engine Tweaks         :         p5_2, after p5_1, 7d
-    
+
     section Phase 7: Launch
     Documentation (Guide & API)       :         p6_1, after p5_2, 10d
     Marketing Site Polish             :         p6_2, after p6_1, 4d
