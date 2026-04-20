@@ -256,8 +256,13 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
         return this.#prettyIdMap.get(id)
     }
 
+    entityExists(id: number) {
+        return this.#activeEntities.has(id)
+    }
+
     getReadonlyFacade() {
         return {
+            entityExists: this.entityExists.bind(this),
             entityHasTag: this.entityHasTag.bind(this),
             entityHasComponent: this.entityHasComponent.bind(this),
             getEntitiesByComponents: this.getEntitiesByComponents.bind(this),

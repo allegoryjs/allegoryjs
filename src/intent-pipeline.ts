@@ -68,8 +68,17 @@ export default class IntentPipeline<
     ) {
         this.#logger.debug(`Calculating concern specificity for entity ${entity} and concern ${JSON.stringify(concern)}`)
 
-        const idScore = concern?.ids?.reduce((acc, id) => {
-            return this.#ecs.getEntityByPrettyId(id) === entity ?
+        const idScore = concern?.ids?.reduce((acc: number, id: number | string) => {
+            let entityMatches: boolean
+            if (typeof id === 'string') {
+                // it's a pretty ID
+                entityMatches = this.#ecs.getEntityByPrettyId(id) === entity
+            } else {
+                // it's a raw ECS ID
+                entityMatches = this.#ecs.entityExists(id) && id === entity
+            }
+
+            return entityMatches ?
                 acc + this.#config.biddingIdMatchPrice :
                 acc
         }, 0) ?? 0

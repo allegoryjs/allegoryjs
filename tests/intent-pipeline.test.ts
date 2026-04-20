@@ -9,7 +9,7 @@ import {
 } from 'bun:test'
 
 import IntentPipeline from '../src/intent-pipeline'
-import { ContributionStatus, LawLayer, type IntentClassificationModule, type IntentPipelineConfig, type Law } from '../src/intent-pipeline-types'
+import { ContributionStatus, LawLayer, type IntentClassificationModule, type IntentClassificationResponse, type IntentPipelineConfig, type Law } from '../src/intent-pipeline-types'
 import type Emitter from '../src/emitter'
 import type LocalizationModule from '../src/localization'
 import type ECS from '../src/ecs'
@@ -26,6 +26,7 @@ describe('Intent Pipeline', () => {
         getEntityByPrettyId: mock(),
         entityHasComponent: mock(),
         isComponent: mock(),
+        entityExists: mock(),
         getEntityComponentData: mock(),
         entityHasTag: mock(),
         getReadonlyFacade: mock(),
@@ -149,7 +150,7 @@ describe('Intent Pipeline', () => {
     describe('handles valid commands correctly', () => {
         it('invokes the correct Law for a given command', async () => {
             const intentName = 'TEST_INTENT'
-            const actorEntityId = 'fake_actor_entity'
+            const actorEntityId = 123
             const lawApplyMock = mock()
 
             lawApplyMock.mockImplementationOnce(() => ({
@@ -173,14 +174,27 @@ describe('Intent Pipeline', () => {
 
             mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [{
                 confidence: 1,
-                name: intentName,
-                actor: actorEntityId,
-            }])
+                dryRun: false,
+                intent: {
+                    name: intentName,
+                    actor: actorEntityId,
+                }
+            }] satisfies Array<IntentClassificationResponse>)
+
+            mockEcs.entityExists.mockImplementationOnce(
+                (entity: number) => entity === actorEntityId
+            )
 
             await ip.handleCommand('test command')
+            expect(mockIntentClassificationModule.getIntentFromCommand).toHaveBeenCalledTimes(1)
 
             expect(lawApplyMock).toHaveBeenCalledTimes(1)
-
+            expect(lawApplyMock).toHaveBeenCalledWith(expect.objectContaining({
+                dryRun: false,
+                actor: actorEntityId,
+            }))
+            expect(mockEcs.entityExists).toHaveBeenCalledTimes(1)
+            expect(mockEcs.entityExists).toHaveBeenCalledWith(actorEntityId)
         })
     })
 })

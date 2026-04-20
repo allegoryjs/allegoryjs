@@ -126,13 +126,13 @@ export interface LawConcern<ComponentSchema extends EngineComponentSchema> {
         value: string | number | boolean // the value that counts as a match
     }>
     tags?: Array<string>
-    ids?: Array<string>
+    ids?: Array<number | string> // raw ECS entity IDs or pretty IDs
 }
 
 export interface LawBid<ComponentSchema extends EngineComponentSchema> {
     law: Law<ComponentSchema>;
     score: number;
-    reorderedAuxiliaries?: Entity[]; // The data we want to save!
+    reorderedAuxiliaries?: Entity[];
 }
 
 // a matcher represents a scenario that a Law cares about
