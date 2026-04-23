@@ -1,6 +1,6 @@
 import type ECS from './ecs'
 import type { EngineComponentSchema, Entity } from './ecs'
-import type { EngineEvent } from './emitter'
+import type { EngineEvent } from './event-bus'
 
 export const ERR_INTENT_REJECTED = 'intent-rejected'
 

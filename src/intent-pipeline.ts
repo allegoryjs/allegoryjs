@@ -1,6 +1,6 @@
 import type ECS from './ecs'
 import type { EngineComponentSchema, Entity } from './ecs'
-import Emitter, { defaultEmitStreams, type EngineEvent } from './emitter'
+import EventBus, { defaultEmitStreams, type EngineEvent } from './event-bus'
 import {
     ContributionStatus,
     ERR_INTENT_REJECTED,
@@ -26,7 +26,7 @@ import { DefaultLogger, type Logger } from './logger'
 export default class IntentPipeline<
     ComponentSchema extends EngineComponentSchema = EngineComponentSchema
 > {
-    #emitter: Emitter
+    #emitter: EventBus
     #config: IntentPipelineConfig
     #intentClassificationModule: IntentClassificationModule
     #t: (slug: string) => string
@@ -35,7 +35,7 @@ export default class IntentPipeline<
     #logger: Logger
 
     constructor(
-        emitter: Emitter,
+        emitter: EventBus,
         ecs: ECS<ComponentSchema>,
         intentClassificationModule: IntentClassificationModule,
         localizationModule: LocalizationModule,
@@ -522,7 +522,7 @@ export default class IntentPipeline<
         for (const event of events) {
             this.#logger.debug(`Emitting event of type ${event.type}`)
 
-            await this.#emitter.emit(event.type, event.payload)
+            await this.#emitter.emitDynamic(event.type, event.payload)
         }
     }
 

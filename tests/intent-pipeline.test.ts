@@ -3,16 +3,17 @@ import {
     describe,
     expect,
     mock,
+    spyOn,
     it,
     beforeEach,
 } from 'bun:test'
 
 import IntentPipeline from '../src/intent-pipeline'
 import { ContributionStatus, LawLayer, type IntentClassificationModule, type IntentClassificationResponse, type IntentPipelineConfig, type Law } from '../src/intent-pipeline-types'
-import type Emitter from '../src/emitter'
+import EventBus from '../src/event-bus'
 import type LocalizationModule from '../src/localization'
 import type ECS from '../src/ecs'
-import { defaultEmitStreams } from '../src/emitter'
+import { defaultEmitStreams } from '../src/event-bus'
 import type { EngineComponentSchema } from '../src/ecs'
 
 // --- Test-only ECS schema extension ---
@@ -23,9 +24,8 @@ interface TestSchema extends EngineComponentSchema {
 import { DefaultLogger, type Logger } from '../src/logger'
 
 describe('Intent Pipeline', () => {
-    const mockEmitter = {
-        emit: mock()
-    } satisfies Emitter
+    const mockEmitter = new EventBus()
+    let emitSpy = spyOn(mockEmitter, 'emit')
 
     const mockEcs = {
         getEntityByPrettyId: mock(),
@@ -68,6 +68,7 @@ describe('Intent Pipeline', () => {
     let ip: IntentPipeline<TestSchema>
 
     beforeEach(() => {
+        emitSpy = spyOn(mockEmitter, 'emit')
         ip = new IntentPipeline(
             mockEmitter,
             mockEcs as unknown as ECS<TestSchema>,
@@ -101,8 +102,8 @@ describe('Intent Pipeline', () => {
             expect(mockIntentClassificationModule.getIntentFromCommand).toHaveBeenCalledWith('test')
             expect(mockI18n.$t).toHaveBeenCalledTimes(1)
             expect(mockI18n.$t).toHaveBeenCalledWith('engine.unknown_command')
-            expect(mockEmitter.emit).toHaveBeenCalledTimes(1)
-            expect(mockEmitter.emit).toHaveBeenCalledWith(defaultEmitStreams.narrate, expect.arrayContaining(['correct']))
+            expect(emitSpy).toHaveBeenCalledTimes(1)
+            expect(emitSpy).toHaveBeenCalledWith(defaultEmitStreams.narrate, expect.arrayContaining(['correct']))
         })
 
         it('emits an "unknown command" narration event when the intent classification module returns at least one invalid intent', async () => {
@@ -126,8 +127,8 @@ describe('Intent Pipeline', () => {
             expect(mockIntentClassificationModule.getIntentFromCommand).toHaveBeenCalledWith('test')
             expect(mockI18n.$t).toHaveBeenCalledTimes(1)
             expect(mockI18n.$t).toHaveBeenCalledWith('engine.unknown_command')
-            expect(mockEmitter.emit).toHaveBeenCalledTimes(1)
-            expect(mockEmitter.emit).toHaveBeenCalledWith(defaultEmitStreams.narrate, expect.arrayContaining(['correct']))
+            expect(emitSpy).toHaveBeenCalledTimes(1)
+            expect(emitSpy).toHaveBeenCalledWith(defaultEmitStreams.narrate, expect.arrayContaining(['correct']))
 
             // invalid intent response: null intent
             mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [
@@ -146,8 +147,8 @@ describe('Intent Pipeline', () => {
             expect(mockIntentClassificationModule.getIntentFromCommand).toHaveBeenLastCalledWith('test')
             expect(mockI18n.$t).toHaveBeenCalledTimes(2)
             expect(mockI18n.$t).toHaveBeenLastCalledWith('engine.unknown_command')
-            expect(mockEmitter.emit).toHaveBeenCalledTimes(2)
-            expect(mockEmitter.emit).toHaveBeenLastCalledWith(defaultEmitStreams.narrate, expect.arrayContaining(['correct']))
+            expect(emitSpy).toHaveBeenCalledTimes(2)
+            expect(emitSpy).toHaveBeenLastCalledWith(defaultEmitStreams.narrate, expect.arrayContaining(['correct']))
         })
     })
 
@@ -462,7 +463,7 @@ describe('Intent Pipeline', () => {
             await ip.handleCommand('conflict test')
             expect(rejectApply).toHaveBeenCalledTimes(1)
             expect(completeApply).not.toHaveBeenCalled()
-            expect(mockEmitter.emit).not.toHaveBeenCalled()
+            expect(emitSpy).not.toHaveBeenCalled()
         })
     })
 
