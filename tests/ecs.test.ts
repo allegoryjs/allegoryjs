@@ -7,6 +7,7 @@ interface TestSchema extends EngineComponentSchema {
   health: { current: number; max: number };
   stats: { strength: number; intelligence: number; dexterity: number };
   label: { text: string };
+  nested: { a: { b: number } };
 }
 
 function makeECS() {
@@ -55,15 +56,12 @@ describe('createEntity', () => {
   test('getEntityByPrettyId returns entity created with metaId', () => {
     const ecs = makeECS();
     const e = ecs.createEntity('hero');
-    // BUG: createEntity never populates #prettyIdMap, so this returns undefined
     expect(ecs.getEntityByPrettyId('hero')).toBe(e);
   });
 
   test('throws when creating entity with duplicate metaId', () => {
     const ecs = makeECS();
     ecs.createEntity('unique-id');
-    // BUG: duplicate check references #prettyIdMap which is never populated,
-    // so it never throws
     expect(() => ecs.createEntity('unique-id')).toThrow();
   });
 });
@@ -186,6 +184,20 @@ describe('updateComponentData', () => {
     });
   });
 
+  test('demonstrates shallow merge behavior (nested objects are overwritten)', () => {
+    const ecs = makeECS();
+    ecs.defineComponent('nested');
+    const e = ecs.createEntity();
+    ecs.setComponentOnEntity(e, 'nested', { a: { b: 1 } });
+    
+    // This will overwrite the whole 'a' object, not merge {b: 1} with {c: 2}
+    ecs.updateComponentData(e, 'nested', { a: { c: 2 } } as any);
+    
+    const data = ecs.getEntityComponentData(e, 'nested');
+    expect(data.a).toEqual({ c: 2 } as any);
+    expect((data.a as any).b).toBeUndefined();
+  });
+
   test('throws for unknown component type', () => {
     const ecs = makeECS();
     const e = ecs.createEntity();
@@ -275,6 +287,16 @@ describe('getEntityComponentData', () => {
     expect(Object.isFrozen(data)).toBe(true);
   });
 
+  test('returned data is deep-frozen', () => {
+    const ecs = makeECS();
+    ecs.defineComponent('nested');
+    const e = ecs.createEntity();
+    ecs.setComponentOnEntity(e, 'nested', { a: { b: 1 } });
+    const data = ecs.getEntityComponentData(e, 'nested');
+    expect(Object.isFrozen(data)).toBe(true);
+    expect(Object.isFrozen(data.a)).toBe(true);
+  });
+
   test('returned data is a deep clone (mutations do not affect store)', () => {
     const ecs = makeECS();
     ecs.defineComponent('position');
@@ -301,8 +323,6 @@ describe('getEntityComponentData', () => {
     const e = ecs.createEntity();
     ecs.setComponentOnEntity(e, 'position', { x: 0, y: 0 });
     ecs.destroyEntity(e);
-    // destroyEntity clears component stores, so the "no component data"
-    // error fires before the "entity is destroyed" check
     expect(() => {
       ecs.getEntityComponentData(e, 'position');
     }).toThrow();
@@ -407,6 +427,27 @@ describe('getEntitiesByComponents', () => {
     ecs.setComponentOnEntity(e1, 'velocity', { x: 1, y: 1 });
     ecs.setComponentOnEntity(e2, 'position', { x: 0, y: 0 });
     expect(ecs.getEntitiesByComponents('position', 'velocity')).toEqual([e1]);
+  });
+
+  test('optimizes intersection by starting with the smallest store', () => {
+    const ecs = makeECS();
+    ecs.defineComponent('position');
+    ecs.defineComponent('velocity');
+    
+    // 100 entities with position
+    for (let i = 0; i < 100; i++) {
+        const e = ecs.createEntity();
+        ecs.setComponentOnEntity(e, 'position', { x: i, y: 0 });
+        if (i === 50) {
+            ecs.setComponentOnEntity(e, 'velocity', { x: 1, y: 1 });
+        }
+    }
+    
+    // velocity store has only 1 entity. 
+    // getEntitiesByComponents should pick velocity store first.
+    const result = ecs.getEntitiesByComponents('position', 'velocity');
+    expect(result.length).toBe(1);
+    expect(ecs.getEntityComponentData(result[0]!, 'position').x).toBe(50);
   });
 
   test('throws for unknown component types', () => {
@@ -545,7 +586,6 @@ describe('getEntityByPrettyId', () => {
   test('returns entity for auto-generated pretty ID', () => {
     const ecs = makeECS();
     const e = ecs.createEntity();
-    // BUG: auto-generated IDs like "entity_1" are also never stored in #prettyIdMap
     expect(ecs.getEntityByPrettyId('entity_1')).toBe(e);
   });
 });

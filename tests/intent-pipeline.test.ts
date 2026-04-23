@@ -474,4 +474,178 @@ describe('Intent Pipeline', () => {
             await expect(ip.handleCommand('unknown')).rejects.toThrow('Missing translation')
         })
     })
+
+    describe('Mutation logic', () => {
+        it('handles entity aliases in CREATE followed by UPDATE', async () => {
+            const intentName = 'ALIAS_TEST'
+            const goblinAlias = 'goblin_1'
+            const goblinId = 42
+
+            const lawApply = mock().mockImplementationOnce(() => ({
+                status: ContributionStatus.completed,
+                mutations: [
+                    { op: 'CREATE', alias: goblinAlias },
+                    { op: 'UPDATE', entity: goblinAlias, component: 'TestComponent', value: { value: 100 } }
+                ]
+            }))
+
+            ip.ratifyLaw({
+                layer: LawLayer.Core,
+                name: 'alias-law',
+                intents: [intentName],
+                apply: lawApply,
+                matchers: [{}]
+            })
+
+            mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [{
+                confidence: 1,
+                intent: { name: intentName }
+            }])
+
+            mockEcs.createEntity.mockImplementationOnce(() => goblinId)
+
+            await ip.handleCommand('spawn goblin')
+
+            expect(mockEcs.createEntity).toHaveBeenCalledWith(goblinAlias)
+            expect(mockEcs.updateComponentData).toHaveBeenCalledWith(goblinId, 'TestComponent', { value: 100 })
+        })
+
+        it('throws when mutation references an unknown alias', async () => {
+            const intentName = 'BAD_ALIAS_TEST'
+            const lawApply = mock().mockImplementationOnce(() => ({
+                status: ContributionStatus.completed,
+                mutations: [
+                    { op: 'UPDATE', entity: 'unknown_alias', component: 'TestComponent', value: { value: 0 } }
+                ]
+            }))
+
+            ip.ratifyLaw({
+                layer: LawLayer.Core,
+                name: 'bad-alias-law',
+                intents: [intentName],
+                apply: lawApply,
+                matchers: [{}]
+            })
+
+            mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [{
+                confidence: 1,
+                intent: { name: intentName }
+            }])
+
+            await expect(ip.handleCommand('bad alias')).rejects.toThrow(/unknown alias 'unknown_alias'/)
+        })
+    })
+
+    describe('Auxiliary reordering', () => {
+        it('reorders auxiliary entities to find the best match', async () => {
+            const intentName = 'REORDER_TEST'
+            // User input: [E1, E2]
+            // Law matcher: [Concern for E2, Concern for E1]
+            const e1 = 101
+            const e2 = 102
+
+            const lawApply = mock().mockImplementationOnce((ctx) => {
+                // Should receive auxiliaries in the reordered order: [E2, E1]
+                expect(ctx.auxiliary).toEqual([e2, e1])
+                expect(ctx.originalAuxiliaries).toEqual([e1, e2])
+                return { status: ContributionStatus.completed }
+            })
+
+            ip.ratifyLaw({
+                layer: LawLayer.Core,
+                name: 'reorder-law',
+                intents: [intentName],
+                apply: lawApply,
+                matchers: [{
+                    auxiliary: [
+                        { ids: [e2] }, // Matches e2 better
+                        { ids: [e1] }  // Matches e1 better
+                    ]
+                }]
+            })
+
+            mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [{
+                confidence: 1,
+                intent: { name: intentName, auxiliary: [e1, e2] }
+            }])
+
+            mockEcs.entityExists.mockImplementation((id) => [e1, e2].includes(id))
+
+            await ip.handleCommand('reorder test')
+            expect(lawApply).toHaveBeenCalled()
+        })
+    })
+
+    describe('Contribution processing', () => {
+        it('emits events and narrations from contributions', async () => {
+            const intentName = 'CONTRIBUTION_TEST'
+            const lawApply = mock().mockImplementationOnce(() => ({
+                status: ContributionStatus.completed,
+                narrations: ['narration.1', 'narration.2'],
+                events: [{ type: 'CUSTOM_EVENT', payload: { data: 'test' } }]
+            }))
+
+            ip.ratifyLaw({
+                layer: LawLayer.Core,
+                name: 'contribution-law',
+                intents: [intentName],
+                apply: lawApply,
+                matchers: [{}]
+            })
+
+            mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [{
+                confidence: 1,
+                intent: { name: intentName }
+            }])
+
+            mockI18n.$t.mockImplementation((s) => `translated:${s}`)
+            const emitDynamicSpy = spyOn(mockEmitter, 'emitDynamic')
+
+            await ip.handleCommand('contribution test')
+
+            expect(emitSpy).toHaveBeenCalledWith(defaultEmitStreams.narrate, ['translated:narration.1'])
+            expect(emitSpy).toHaveBeenCalledWith(defaultEmitStreams.narrate, ['translated:narration.2'])
+            expect(emitDynamicSpy).toHaveBeenCalledWith('CUSTOM_EVENT', { data: 'test' })
+        })
+    })
+
+    describe('Multi-intent handling', () => {
+        it('executes multiple intents sequentially', async () => {
+            const intent1 = 'INTENT_1'
+            const intent2 = 'INTENT_2'
+            const apply1 = mock().mockImplementationOnce(() => ({ status: ContributionStatus.pass }))
+            const apply2 = mock().mockImplementationOnce(() => ({ status: ContributionStatus.pass }))
+
+            ip.ratifyLaw({ layer: LawLayer.Core, name: 'law1', intents: [intent1], apply: apply1, matchers: [{}] })
+            ip.ratifyLaw({ layer: LawLayer.Core, name: 'law2', intents: [intent2], apply: apply2, matchers: [{}] })
+
+            mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [
+                { confidence: 1, intent: { name: intent1 } },
+                { confidence: 1, intent: { name: intent2 } }
+            ])
+
+            await ip.handleCommand('multi intent')
+            expect(apply1).toHaveBeenCalled()
+            expect(apply2).toHaveBeenCalled()
+        })
+
+        it('stops multi-intent loop if an intent is rejected', async () => {
+            const intent1 = 'INTENT_REJECT'
+            const intent2 = 'INTENT_SHOULD_SKIP'
+            const apply1 = mock().mockImplementationOnce(() => ({ status: ContributionStatus.rejected }))
+            const apply2 = mock()
+
+            ip.ratifyLaw({ layer: LawLayer.Core, name: 'law-reject', intents: [intent1], apply: apply1, matchers: [{}] })
+            ip.ratifyLaw({ layer: LawLayer.Core, name: 'law-skip', intents: [intent2], apply: apply2, matchers: [{}] })
+
+            mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [
+                { confidence: 1, intent: { name: intent1 } },
+                { confidence: 1, intent: { name: intent2 } }
+            ])
+
+            await ip.handleCommand('reject loop')
+            expect(apply1).toHaveBeenCalled()
+            expect(apply2).not.toHaveBeenCalled()
+        })
+    })
 })
