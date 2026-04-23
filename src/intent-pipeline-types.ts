@@ -104,11 +104,14 @@ export enum LawMutationOpType {
 }
 
 export type MutationOp<ComponentSchema extends EngineComponentSchema> =
-    | { op: LawMutationOpType.create,  alias?: string, components?: Partial<ComponentSchema & string>}
-    | { op: LawMutationOpType.remove,  entity: EntityRef, component: keyof ComponentSchema & string }
-    | { op: LawMutationOpType.update,  entity: EntityRef, component: keyof ComponentSchema & string, value: ComponentSchema[keyof ComponentSchema & string] } // Merges data
-    | { op: LawMutationOpType.set,     entity: EntityRef, component: keyof ComponentSchema & string, value: ComponentSchema[keyof ComponentSchema & string] } // Replaces data completely
+    | { op: LawMutationOpType.create,  alias?: string, components?: Partial<ComponentSchema>}
     | { op: LawMutationOpType.destroy, entity: EntityRef }
+    | {
+          [K in keyof ComponentSchema & string]:
+              | { op: LawMutationOpType.remove, entity: EntityRef, component: K }
+              | { op: LawMutationOpType.update, entity: EntityRef, component: K, value: Partial<ComponentSchema[K]> } // update merges data
+              | { op: LawMutationOpType.set, entity: EntityRef, component: K, value: ComponentSchema[K] } // set replaces completely
+      }[keyof ComponentSchema & string]
 
 export interface Contribution<ComponentSchema extends EngineComponentSchema> {
     status: ContributionStatus

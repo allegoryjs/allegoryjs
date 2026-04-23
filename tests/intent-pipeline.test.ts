@@ -2,7 +2,6 @@ import {
     afterEach,
     describe,
     expect,
-    test,
     mock,
     it,
     beforeEach,
@@ -35,7 +34,7 @@ describe('Intent Pipeline', () => {
         destroyEntity: mock(),
         setComponentOnEntity: mock(),
         updateComponentData: mock(),
-    } satisfies ECS
+    } as unknown as ECS
 
     const mockConfigDefault: IntentPipelineConfig = Object.freeze({
         confidenceThreshold: 0.7,
@@ -88,7 +87,7 @@ describe('Intent Pipeline', () => {
     describe('handles invalid commands correctly', () => {
         it('emits an "unknown command" narration event when there are no intent responses given by the intent classification module', async () => {
             mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [])
-            mockI18n.$t.mockImplementationOnce((slug) => {
+            mockI18n.$t.mockImplementationOnce((slug: string) => {
                 return slug === 'engine.unknown_command' ? 'correct' : 'incorrect'
             })
             await ip.handleCommand('test')
@@ -112,7 +111,7 @@ describe('Intent Pipeline', () => {
                     intent: {},
                 },
             ])
-            mockI18n.$t.mockImplementation((slug) => {
+            mockI18n.$t.mockImplementation((slug: string) => {
                 return slug === 'engine.unknown_command' ? 'correct' : 'incorrect'
             })
 
@@ -181,7 +180,7 @@ describe('Intent Pipeline', () => {
                 }
             }] satisfies Array<IntentClassificationResponse>)
 
-            mockEcs.entityExists.mockImplementationOnce(
+            (mockEcs.entityExists as ReturnType<typeof mock>).mockImplementationOnce(
                 (entity: number) => entity === actorEntityId
             )
 

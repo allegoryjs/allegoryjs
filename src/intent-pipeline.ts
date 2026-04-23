@@ -345,7 +345,7 @@ export default class IntentPipeline<
 
             if (result.status === ContributionStatus.rejected) {
                 this.#logger.info('Intent rejected')
-                return []
+                return [result]
             }
 
             contributions.push(result)
