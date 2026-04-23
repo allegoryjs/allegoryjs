@@ -71,9 +71,15 @@ const cloneAndFreeze = <T>(value: T, seen: WeakMap<object, unknown>): T => {
         if ('length' in value && typeof value.length === 'number') {
             const copy = new ctor(value as ArrayLike<number>)
             seen.set(value, copy as object)
-            Object.freeze(copy)
             return copy as T
         }
+    }
+
+    if (Array.isArray(value)) {
+        const copy = value.map(item => cloneAndFreeze(item, seen))
+        seen.set(value, copy)
+        Object.freeze(copy)
+        return copy as T
     }
 
     const proto = Object.getPrototypeOf(value)

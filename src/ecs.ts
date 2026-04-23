@@ -1,4 +1,5 @@
 import deepFreeze from './utilities/deepFreeze';
+import { DefaultLogger, type Logger } from './logger';
 
 export type Entity = number
 
@@ -25,15 +26,31 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
         Map<Entity, ComponentSchema[keyof ComponentSchema]>
     >()
     #prettyIdMap = new Map<string, Entity>()
+    #logger: Logger
 
-    constructor() {
+    constructor(logger?: Logger) {
+        this.#logger = logger ?? new DefaultLogger()
+
         // Bootstrap the required system components
         this.#components.set('Tags', new Map());
         this.#components.set('Meta', new Map());
+        this.#logger.debug('ECS initialized with built-in Tags and Meta components')
+    }
+
+    #assertEntityExists(entity: Entity, entityOperation: string) {
+        if (!this.#activeEntities.has(entity)) {
+            if (entity < 1 || entity >= this.#nextEntityId) {
+                throw new Error(`Can't ${entityOperation} entity ${entity}; entity does not exist`)
+            }
+
+            throw new Error(`Can't ${entityOperation} entity ${entity}; entity is destroyed`)
+        }
     }
 
     isComponent(name: string): name is keyof ComponentSchema & string {
-        return (Array.from(this.#components.keys()) as string[]).includes(name)
+        const result = this.#components.has(name)
+        this.#logger.debug(`isComponent("${name}"): ${result}`)
+        return result
     }
 
     defineComponent<ComponentName extends keyof ComponentSchema & string>(name: ComponentName) {
@@ -42,17 +59,21 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
         }
 
         this.#components.set(name, new Map())
+        this.#logger.info(`Component "${name}" defined`)
 
         return name
     }
 
     createEntity(metaId?: string) {
         if (metaId && this.#prettyIdMap.has(metaId)) {
-            throw new Error(`Cannot register new entity with pretty ID ${metaId}; entity ${this.#prettyIdMap.get(metaId)} already is already assigned that ID`)
+            throw new Error(`Cannot register new entity with pretty ID ${metaId}; entity ${this.#prettyIdMap.get(metaId)} is already assigned that ID`)
         }
         const id = this.#nextEntityId++
 
         this.#activeEntities.add(id)
+        this.#logger.debug(`Entity ${id} added to active set`)
+
+        const metaIdToSet = metaId || `entity_${id}`
 
         this.setComponentOnEntity(id, 'Tags', { list: new Set<string>() })
         this.setComponentOnEntity(
@@ -60,10 +81,13 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
             'Meta',
             {
                 name: `Entity_${id}`,
-                id: metaId || `entity_${id}`,
+                id: metaIdToSet,
                 created: Date.now()
             }
         )
+        this.#prettyIdMap.set(metaIdToSet, id)
+
+        this.#logger.info(`Entity ${id} created (metaId: "${metaIdToSet}")`)
 
         return id
     }
@@ -80,23 +104,21 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
             throw new Error(`Can't set component on entity ${entity}; unknown component type: ${name}`)
         }
 
-        if (!this.#activeEntities.has(entity)) {
-            if (entity > this.#nextEntityId - 1) {
-                throw new Error(`Can't set component on entity ${entity}; entity does not exist`)
-            }
+        this.#assertEntityExists(entity, 'set component on')
 
-            throw new Error(`Can't set component on entity ${entity}; entity is destroyed`)
-        }
-
+        const isOverwrite = store.has(entity)
         store.set(entity, data)
+        this.#logger.debug(`${isOverwrite ? 'Overwrote' : 'Set'} component "${name}" on entity ${entity}`)
     }
 
     // merge component data with new data
     updateComponentData<ComponentName extends keyof ComponentSchema & string> (
-        entity: number,
+        entity: Entity,
         name: ComponentName,
-        data: Partial<ComponentSchema[keyof ComponentSchema]>
+        data: Partial<ComponentSchema[ComponentName]>
     ) {
+        this.#assertEntityExists(entity, 'update component data on')
+
         const store = this.#components.get(name);
 
         if (!store) {
@@ -105,18 +127,11 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
 
         const existingComponentData = store.get(entity)
 
-        if (!this.#activeEntities.has(entity)) {
-            if (entity > this.#nextEntityId - 1) {
-                throw new Error(`Can't update component data on entity ${entity}; entity does not exist`)
-            }
-
-            throw new Error(`Can't update component data on entity ${entity}; entity is destroyed`)
-        }
-
         if (!existingComponentData) {
             throw new Error(`Can't update component data for entity ${entity}; entity does not have component ${name}`)
         }
 
+        this.#logger.debug(`Merging component "${name}" data on entity ${entity}: ${JSON.stringify(data)}`)
 
         store.set(entity, {
             ...existingComponentData,
@@ -128,42 +143,32 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
         entity: Entity,
         componentType: ComponentName,
     ) {
+        this.#assertEntityExists(entity, 'remove component from')
+
         const store = this.#components.get(componentType)
 
         if (!store) {
-            throw new Error(`Can't remove component from entity ${entity}; entity does not have component ${componentType}`)
-        }
-
-        if (!this.#activeEntities.has(entity)) {
-            if (entity > this.#nextEntityId - 1) {
-                throw new Error(`Can't remove component from entity ${entity}; entity does not exist`)
-            }
-
-            throw new Error(`Can't remove component from entity ${entity}; entity is destroyed`)
+            throw new Error(`Can't remove component from entity ${entity}; unknown component type: ${componentType}`)
         }
 
         store.delete(entity)
+        this.#logger.debug(`Removed component "${componentType}" from entity ${entity}`)
     }
 
     getEntityComponentData<ComponentName extends keyof ComponentSchema & string>(
         entity: Entity,
         name: ComponentName,
     ): Readonly<ComponentSchema[ComponentName]> {
+        this.#assertEntityExists(entity, 'get component data for')
+
         const store = this.#components.get(name)
         const componentData = store?.get(entity)
-
 
         if (!store || !componentData) {
             throw new Error(`Can't get component data for entity ${entity}; entity does not have component ${name}`)
         }
 
-        if (!this.#activeEntities.has(entity)) {
-            if (entity > this.#nextEntityId - 1) {
-                throw new Error(`Can't get component data for entity ${entity}; entity does not exist`)
-            }
-
-            throw new Error(`Can't get component data for entity ${entity}; entity is destroyed`)
-        }
+        this.#logger.debug(`Retrieved component "${name}" data for entity ${entity}`)
 
         return deepFreeze(componentData)
     }
@@ -172,29 +177,30 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
         entity: Entity,
         componentType: ComponentName,
     ) {
-        if (!this.#activeEntities.has(entity)) {
-            if (entity > this.#nextEntityId - 1) {
-                throw new Error(`Can't check for component presence on entity ${entity}; entity does not exist`)
-            }
+        this.#assertEntityExists(entity, 'check for component presence on')
 
-            throw new Error(`Can't check for component presence on entity ${entity}; entity is destroyed`)
-        }
         const component = this.#components.get(componentType)
 
         if (!component) {
             throw new Error(`Can't check for component presence on entity ${entity}; component ${componentType} does not exist`)
         }
-        return !!component?.has(entity)
+        const result = component.has(entity)
+        this.#logger.debug(`entityHasComponent(${entity}, "${componentType}"): ${result}`)
+        return result
     }
 
     getComponentsOnEntity<ComponentName extends keyof ComponentSchema>(
         entity: Entity
     ): ComponentName[] {
-        return Array.from(this.#components).flatMap(([componentName]) =>
+        this.#assertEntityExists(entity, 'get components on')
+
+        const components = Array.from(this.#components).flatMap(([componentName]) =>
             this.entityHasComponent(entity, componentName)
                 ? [componentName as ComponentName]
                 : []
         )
+        this.#logger.debug(`Components on entity ${entity}: [${components.join(', ')}]`)
+        return components
     }
 
     getEntitiesByComponents<ComponentName extends keyof ComponentSchema & string>(
@@ -202,12 +208,14 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
     ): Entity[] {
         if (componentTypes.length === 0) return []
 
+        this.#logger.debug(`Querying entities by components: [${componentTypes.join(', ')}]`)
+
         if (!componentTypes.every(type => this.isComponent(type))) {
             const missingTypes = componentTypes.filter(type => !this.isComponent(type))
             throw new Error(`Cannot get entities by component: given components ${missingTypes.join(', ')} do not exist`)
         }
 
-        const sortedTypes = componentTypes.sort((a, b) => {
+        const sortedTypes = componentTypes.toSorted((a, b) => {
             return (this.#components.get(a)?.size ?? 0) - (this.#components.get(b)?.size ?? 0)
         });
 
@@ -220,6 +228,8 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
 
         if (!smallestStore || smallestStore.size === 0) return []
 
+        this.#logger.debug(`Using "${smallestType}" as smallest store (size: ${smallestStore.size}) for intersection`)
+
         const result: Entity[] = []
 
         for (const entity of smallestStore.keys()) {
@@ -227,40 +237,61 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
             if (hasAll) result.push(entity)
         }
 
+        this.#logger.debug(`Query result: [${result.join(', ')}] (${result.length} entities)`)
+
         return result
     }
 
     destroyEntity(entity: Entity) {
+        this.#assertEntityExists(entity, 'destroy')
+
+        const prettyId = this.getEntityComponentData(entity, 'Meta').id
+        this.#logger.debug(`Destroying entity ${entity}; clearing all component data`)
+
         for (const store of this.#components.values()) {
             store.delete(entity);
         }
 
         this.#activeEntities.delete(entity);
+        this.#prettyIdMap.delete(prettyId)
+        this.#logger.info(`Entity ${entity} destroyed`)
     }
 
     addTagToEntity(entity: Entity, tag: string) {
+        this.#assertEntityExists(entity, 'add tag to')
+
         const store = this.#components.get('Tags');
         const tagData = store?.get(entity) as EngineComponentSchema['Tags'];
 
         if (tagData) {
             tagData.list.add(tag);
+            this.#logger.debug(`Added tag "${tag}" to entity ${entity}`)
         }
     }
 
     entityHasTag(entity: Entity, tag: string) {
+        this.#assertEntityExists(entity, 'check for tags on')
+
         const tagData = this.getEntityComponentData(entity, 'Tags');
-        return tagData?.list.has(tag) ?? false;
+        const result = tagData?.list.has(tag) ?? false;
+        this.#logger.debug(`entityHasTag(${entity}, "${tag}"): ${result}`)
+        return result
     }
 
     getEntityByPrettyId(id: string) {
-        return this.#prettyIdMap.get(id)
+        const entity = this.#prettyIdMap.get(id)
+        this.#logger.debug(`getEntityByPrettyId("${id}"): ${entity ?? 'not found'}`)
+        return entity
     }
 
     entityExists(id: number) {
-        return this.#activeEntities.has(id)
+        const result = this.#activeEntities.has(id)
+        this.#logger.debug(`entityExists(${id}): ${result}`)
+        return result
     }
 
     getReadonlyFacade() {
+        this.#logger.debug('Creating readonly facade')
         return {
             entityExists: this.entityExists.bind(this),
             entityHasTag: this.entityHasTag.bind(this),
@@ -268,6 +299,7 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
             getEntitiesByComponents: this.getEntitiesByComponents.bind(this),
             getComponentsOnEntity: this.getComponentsOnEntity.bind(this),
             getEntityComponentData: this.getEntityComponentData.bind(this),
+            getEntityByPrettyId: this.getEntityByPrettyId.bind(this),
         }
     }
 }
