@@ -1,4 +1,4 @@
-import type ECS from './ecs'
+import type ReadonlyFacade from './ecs'
 import type { EngineComponentSchema, Entity } from './ecs'
 import type { EngineEvent } from './event-bus'
 
@@ -81,7 +81,7 @@ export interface LawContext {
     dryRun: boolean
     actor?: Entity
     target?: Entity
-    ecsUtils: ReturnType<InstanceType<typeof ECS>['getReadonlyFacade']>
+    ecsUtils: ReadonlyFacade
 
     // the list of auxiliaries (implements, tools, etc.) that the user
     // issued the command with, sorted in the order that produces

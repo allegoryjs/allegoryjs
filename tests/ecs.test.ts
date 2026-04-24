@@ -633,6 +633,91 @@ describe('getReadonlyFacade', () => {
   });
 });
 
+// ─── Systems ────────────────────────────────────────────────────────
+
+describe('Systems', () => {
+  test('registerSystem adds a system and systems getter retrieves it', () => {
+    const ecs = makeECS();
+    const system = {
+      name: 'test-system',
+      run: async () => {}
+    };
+    ecs.registerSystem(system);
+    const systems = ecs.systems;
+    expect(systems.length).toBe(1);
+    expect(systems[0]?.name).toBe('test-system');
+  });
+
+  test('systems are returned in priority order (ascending)', () => {
+    const ecs = makeECS();
+    const s1 = { name: 's1', priority: 100, run: async () => {} };
+    const s2 = { name: 's2', priority: 10, run: async () => {} };
+    const s3 = { name: 's3', priority: 50, run: async () => {} };
+
+    ecs.registerSystem(s1);
+    ecs.registerSystem(s2);
+    ecs.registerSystem(s3);
+
+    const systems = ecs.systems;
+    expect(systems[0]?.name).toBe('s2');
+    expect(systems[1]?.name).toBe('s3');
+    expect(systems[2]?.name).toBe('s1');
+  });
+
+  test('systems use default priority when none is provided', () => {
+    // Default priority set to 25
+    const ecs = new ECS<TestSchema>(undefined, 25);
+    const s1 = { name: 's1', priority: 50, run: async () => {} };
+    const s2 = { name: 's2', run: async () => {} }; // should be 25
+    const s3 = { name: 's3', priority: 10, run: async () => {} };
+
+    ecs.registerSystem(s1);
+    ecs.registerSystem(s2);
+    ecs.registerSystem(s3);
+
+    const systems = ecs.systems;
+    expect(systems[0]?.name).toBe('s3');
+    expect(systems[1]?.name).toBe('s2');
+    expect(systems[2]?.name).toBe('s1');
+  });
+
+  test('deregisterSystem removes a system', () => {
+    const ecs = makeECS();
+    const s1 = { name: 's1', run: async () => {} };
+    ecs.registerSystem(s1);
+    expect(ecs.systems.length).toBe(1);
+    ecs.deregisterSystem('s1');
+    expect(ecs.systems.length).toBe(0);
+  });
+
+  test('registerSystem throws on duplicate name', () => {
+    const ecs = makeECS();
+    const s1 = { name: 's1', run: async () => {} };
+    ecs.registerSystem(s1);
+    expect(() => ecs.registerSystem({ name: 's1', run: async () => {} })).toThrow();
+  });
+
+  test('deregisterSystem throws if system not found', () => {
+    const ecs = makeECS();
+    expect(() => ecs.deregisterSystem('nope')).toThrow();
+  });
+
+  test('systems getter returns a frozen array with frozen items', () => {
+    const ecs = makeECS();
+    ecs.registerSystem({ name: 's1', run: async () => {} });
+    const systems = ecs.systems;
+    
+    // The array itself is frozen
+    expect(Object.isFrozen(systems)).toBe(true);
+    expect(() => (systems as any).push({ name: 's2', run: async () => {} })).toThrow();
+
+    // The items inside are frozen clones
+    const s1 = systems[0]!;
+    expect(Object.isFrozen(s1)).toBe(true);
+    expect(() => { (s1 as any).name = 'new name' }).toThrow();
+  });
+});
+
 // ─── multi-entity integration ───────────────────────────────────────
 
 describe('multi-entity integration', () => {

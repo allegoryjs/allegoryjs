@@ -10,12 +10,28 @@ export interface EngineComponentSchema {
 
     Meta: {
         name: string
-        created: number
+        created: number // ms since epoch
 
         // pretty ID set by the developer; not to be confused
         // with the entity ID, which is an integer
         id: string
     }
+}
+
+export interface ReadonlyFacade<ComponentSchema> {
+    entityExists(entity: Entity): boolean
+    entityHasTag(entity: Entity, tag: string): boolean
+    entityHasComponent<ComponentName extends keyof ComponentSchema & string>(entity: Entity, componentName: ComponentName): boolean
+    getEntityByPrettyId(prettyId: string): Entity | undefined
+    getComponentsOnEntity<ComponentName extends keyof ComponentSchema & string>(entity: Entity): ComponentName[]
+    getEntitiesByComponents<ComponentName extends keyof ComponentSchema & string>(...componentTypes: ComponentName[]): Entity[]
+    getEntityComponentData<ComponentName extends keyof ComponentSchema & string>(entity: Entity, name: ComponentName): Readonly<ComponentSchema[ComponentName]>
+}
+
+export interface System<ComponentSchema> {
+    readonly name: string
+    readonly priority?: number
+    run(ecs: ReadonlyFacade<ComponentSchema>): Promise<void>
 }
 
 export default class ECS<ComponentSchema extends (EngineComponentSchema & Record<string, any>) = EngineComponentSchema> {
@@ -25,16 +41,30 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
         keyof ComponentSchema & string,
         Map<Entity, ComponentSchema[keyof ComponentSchema]>
     >()
+    #systems = new Map<string, System<ComponentSchema>>()
     #prettyIdMap = new Map<string, Entity>()
     #logger: Logger
+    #defaultSystemPriority: number
 
-    constructor(logger?: Logger) {
+    constructor(logger?: Logger, defaultSystemPriority = 50) {
         this.#logger = logger ?? new DefaultLogger()
 
         // Bootstrap the required system components
         this.#components.set('Tags', new Map());
         this.#components.set('Meta', new Map());
         this.#logger.debug('ECS initialized with built-in Tags and Meta components')
+        this.#defaultSystemPriority = defaultSystemPriority
+    }
+
+    /**
+     * Array of Systems, sorted by priority order
+     */
+    get systems(): readonly System<ComponentSchema>[] {
+        return deepFreeze(
+            [...this.#systems.values()].sort((a, b) =>
+                (a.priority ?? this.#defaultSystemPriority) - (b.priority ?? this.#defaultSystemPriority)
+            )
+        )
     }
 
     #assertEntityExists(entity: Entity, entityOperation: string) {
@@ -90,6 +120,32 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
         this.#logger.info(`Entity ${id} created (metaId: "${metaIdToSet}")`)
 
         return id
+    }
+
+    registerSystem(system: System<ComponentSchema>) {
+        const { name } = system
+
+        if (this.#systems.has(name)) {
+            const err = `Cannot register system: system with name ${name} is already registered`
+
+            this.#logger.error(err)
+            throw new Error(err)
+        }
+
+        this.#systems.set(name, system)
+        this.#logger.info(`System ${name} has been registered`)
+    }
+
+    deregisterSystem(systemName: string) {
+        if (!this.#systems.has(systemName)) {
+            const err = `Cannot deregister system: system with name ${systemName} is not registered`
+
+            this.#logger.error(err)
+            throw new Error(err)
+        }
+
+        this.#systems.delete(systemName)
+        this.#logger.info(`System ${systemName} has been deregistered`)
     }
 
     // destructive; overwrites existing component data, if any
@@ -290,7 +346,7 @@ export default class ECS<ComponentSchema extends (EngineComponentSchema & Record
         return result
     }
 
-    getReadonlyFacade() {
+    getReadonlyFacade(): ReadonlyFacade<ComponentSchema> {
         this.#logger.debug('Creating readonly facade')
         return {
             entityExists: this.entityExists.bind(this),
