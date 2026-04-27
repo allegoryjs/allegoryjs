@@ -1,4 +1,4 @@
-import type { Logger, LoggerChannelOpts } from '@/logger/logger.types'
+import type { Logger, LoggerChannelOpts } from '@/helpers/logger/logger.types'
 
 /**
  * Responsible for logging messages. Defaults to always printing warnings and errors.

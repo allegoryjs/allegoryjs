@@ -1,13 +1,20 @@
 import { describe, expect, it, beforeEach, spyOn } from 'bun:test'
 
-import EventBus, { WILDCARD } from '@/event-bus/event-bus'
-import type { EmitContext, Listener, EventMap } from '@/event-bus/event-bus.types'
+import EventBus, { WILDCARD } from '@/helpers/event-bus/event-bus'
+import type { EmitContext, Listener, EventMap } from '@/helpers/event-bus/event-bus.types'
+import { DefaultLogger } from '@/helpers/logger/logger'
 
 describe('EventBus', () => {
   let emitter: EventBus
 
   beforeEach(() => {
-    emitter = new EventBus()
+    const logger = new DefaultLogger({
+      info: false,
+      debug: false,
+      error: false,
+      warn: false,
+    })
+    emitter = new EventBus({ logger })
   })
 
   // =============================

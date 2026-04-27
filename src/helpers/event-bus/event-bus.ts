@@ -7,9 +7,9 @@ import type {
   ListenerEntry,
   EventBusConfig,
   Disposer,
-} from '@/event-bus/event-bus.types'
-import { DefaultLogger } from '@/logger/logger'
-import type { Logger } from '@/logger/logger.types'
+} from '@/helpers/event-bus/event-bus.types'
+import { DefaultLogger } from '@/helpers/logger/logger'
+import type { Logger } from '@/helpers/logger/logger.types'
 
 export const defaultEmitStreams = {
   narrate: 'narrate',

@@ -1,6 +1,6 @@
-import type { Entity, EngineComponentSchema, ReadonlyFacade, System } from '@/ecs/ecs.types'
-import { DefaultLogger } from '@/logger/logger'
-import type { Logger } from '@/logger/logger.types'
+import { DefaultLogger } from '@/helpers/logger/logger'
+import type { Logger } from '@/helpers/logger/logger.types'
+import type { Entity, EngineComponentSchema, ReadonlyFacade, System } from '@/kernel/ecs/ecs.types'
 import deepFreeze from '@/utilities/deepFreeze/deepFreeze'
 
 export default class ECS<

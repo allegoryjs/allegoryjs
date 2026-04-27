@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 
-import ECS from '@/ecs/ecs'
-import type { EngineComponentSchema } from '@/ecs/ecs.types'
+import { DefaultLogger } from '@/helpers/logger/logger'
+import ECS from '@/kernel/ecs/ecs'
+import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
 
 interface TestSchema extends EngineComponentSchema {
   position: { x: number; y: number }
@@ -13,7 +14,13 @@ interface TestSchema extends EngineComponentSchema {
 }
 
 function makeECS() {
-  return new ECS<TestSchema>()
+  const logger = new DefaultLogger({
+    info: false,
+    debug: false,
+    error: false,
+    warn: false,
+  })
+  return new ECS<TestSchema>(logger)
 }
 
 // ─── createEntity ───────────────────────────────────────────────────

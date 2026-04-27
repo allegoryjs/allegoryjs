@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, mock, spyOn, it, beforeEach } from 'bun:test'
 
-import type ECS from '@/ecs/ecs'
-import type { EngineComponentSchema } from '@/ecs/ecs.types'
-import EventBus from '@/event-bus/event-bus'
-import { defaultEmitStreams } from '@/event-bus/event-bus'
-import IntentPipeline from '@/intent-pipeline/intent-pipeline'
+import EventBus from '@/helpers/event-bus/event-bus'
+import { defaultEmitStreams } from '@/helpers/event-bus/event-bus'
+import type LocalizationModule from '@/helpers/localization/localization'
+import { DefaultLogger } from '@/helpers/logger/logger'
+import type { Logger } from '@/helpers/logger/logger.types'
+import type ECS from '@/kernel/ecs/ecs'
+import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
+import IntentPipeline from '@/kernel/intent-pipeline/intent-pipeline'
 import {
   ContributionStatus,
   LawLayer,
@@ -12,10 +15,7 @@ import {
   type IntentClassificationResponse,
   type IntentPipelineConfig,
   type Law,
-} from '@/intent-pipeline/intent-pipeline.types'
-import type LocalizationModule from '@/localization/localization'
-import { DefaultLogger } from '@/logger/logger'
-import type { Logger } from '@/logger/logger.types'
+} from '@/kernel/intent-pipeline/intent-pipeline.types'
 
 // --- Test-only ECS schema extension ---
 interface TestSchema extends EngineComponentSchema {
@@ -58,10 +58,10 @@ describe('Intent Pipeline', () => {
   } satisfies IntentClassificationModule
 
   const logger: Logger = new DefaultLogger({
-    info: true,
-    debug: true,
-    error: true,
-    warn: true,
+    info: false,
+    debug: false,
+    error: false,
+    warn: false,
   })
 
   let ip: IntentPipeline<TestSchema>
