@@ -24,8 +24,8 @@ interface TestSchema extends EngineComponentSchema {
 import { DefaultLogger, type Logger } from '../src/logger'
 
 describe('Intent Pipeline', () => {
-    const mockEmitter = new EventBus()
-    let emitSpy = spyOn(mockEmitter, 'emit')
+    const mockEventBus = new EventBus()
+    let emitSpy = spyOn(mockEventBus, 'emit')
 
     const mockEcs = {
         getEntityByPrettyId: mock(),
@@ -68,9 +68,9 @@ describe('Intent Pipeline', () => {
     let ip: IntentPipeline<TestSchema>
 
     beforeEach(() => {
-        emitSpy = spyOn(mockEmitter, 'emit')
+        emitSpy = spyOn(mockEventBus, 'emit')
         ip = new IntentPipeline(
-            mockEmitter,
+            mockEventBus,
             mockEcs as unknown as ECS<TestSchema>,
             mockIntentClassificationModule,
             mockI18n,
@@ -389,6 +389,94 @@ describe('Intent Pipeline', () => {
             await ip.handleCommand('dry run test')
             expect(lawApply).toHaveBeenCalled()
         })
+
+        it('does not execute mutations or emit events when dryRun is true', async () => {
+            const intentName = 'DRY_RUN_EXECUTION_TEST'
+            const actorEntityId = 7
+
+            const testLaw: Law<TestSchema> = {
+                layer: LawLayer.Core,
+                name: 'dry-run-execution-law',
+                intents: [intentName],
+                apply: (ctx) => Promise.resolve({
+                    status: ContributionStatus.pass,
+                    mutations: [
+                        { op: 'DESTROY' as any, entity: 99 }
+                    ],
+                    events: [
+                        { type: 'TEST_EVENT', payload: { foo: 'bar' } }
+                    ],
+                    narrations: ['Dry run narration']
+                }),
+                matchers: [{ actor: { ids: [actorEntityId] } }]
+            }
+            ip.ratifyLaw(testLaw)
+
+            mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [{
+                confidence: 1,
+                dryRun: true,
+                intent: { name: intentName, actor: actorEntityId }
+            }])
+            mockEcs.entityExists.mockImplementation(() => true)
+            mockI18n.$t.mockImplementation((s: string) => s)
+
+            const emitDynamicSpy = spyOn(mockEventBus, 'emitDynamic')
+
+            await ip.handleCommand('dry run test')
+
+            // Mutations should NOT be called
+            expect(mockEcs.destroyEntity).not.toHaveBeenCalled()
+
+            // Events should NOT be emitted
+            expect(emitDynamicSpy).not.toHaveBeenCalled()
+
+            // Narrations SHOULD still be emitted
+            expect(emitSpy).toHaveBeenCalledWith(defaultEmitStreams.narrate, ['Dry run narration'])
+        })
+
+        it('executes mutations and emits events when dryRun is false', async () => {
+            const intentName = 'NORMAL_RUN_EXECUTION_TEST'
+            const actorEntityId = 7
+
+            const testLaw: Law<TestSchema> = {
+                layer: LawLayer.Core,
+                name: 'normal-run-execution-law',
+                intents: [intentName],
+                apply: (ctx) => Promise.resolve({
+                    status: ContributionStatus.pass,
+                    mutations: [
+                        { op: 'DESTROY' as any, entity: 99 }
+                    ],
+                    events: [
+                        { type: 'TEST_EVENT', payload: { foo: 'bar' } }
+                    ],
+                    narrations: ['Normal run narration']
+                }),
+                matchers: [{ actor: { ids: [actorEntityId] } }]
+            }
+            ip.ratifyLaw(testLaw)
+
+            mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [{
+                confidence: 1,
+                dryRun: false,
+                intent: { name: intentName, actor: actorEntityId }
+            }])
+            mockEcs.entityExists.mockImplementation(() => true)
+            mockI18n.$t.mockImplementation((s: string) => s)
+
+            const emitDynamicSpy = spyOn(mockEventBus, 'emitDynamic')
+
+            await ip.handleCommand('normal run test')
+
+            // Mutations SHOULD be called
+            expect(mockEcs.destroyEntity).toHaveBeenCalledWith(99)
+
+            // Events SHOULD be emitted
+            expect(emitDynamicSpy).toHaveBeenCalledWith('TEST_EVENT', { foo: 'bar' })
+
+            // Narrations SHOULD be emitted
+            expect(emitSpy).toHaveBeenCalledWith(defaultEmitStreams.narrate, ['Normal run narration'])
+        })
     })
 
     describe('Edge cases', () => {
@@ -599,7 +687,7 @@ describe('Intent Pipeline', () => {
             }])
 
             mockI18n.$t.mockImplementation((s) => `translated:${s}`)
-            const emitDynamicSpy = spyOn(mockEmitter, 'emitDynamic')
+            const emitDynamicSpy = spyOn(mockEventBus, 'emitDynamic')
 
             await ip.handleCommand('contribution test')
 

@@ -332,7 +332,7 @@ export default class IntentPipeline<
                 }`)
             }
 
-            const lawCtx: LawContext = {
+            const lawCtx: LawContext<ComponentSchema> = {
                 actor: intent.actor,
                 target: intent.target,
                 auxiliary: reorderedAuxiliaries,
@@ -511,7 +511,9 @@ export default class IntentPipeline<
             }
         }
 
-        this.#executeMutations(mutations)
+        if (!dryRun) {
+            this.#executeMutations(mutations)
+        }
 
         for (const narration of narrations) {
             await this.#emitter.emit(defaultEmitStreams.narrate, [
@@ -519,11 +521,14 @@ export default class IntentPipeline<
             ])
         }
 
-        for (const event of events) {
-            this.#logger.debug(`Emitting event of type ${event.type}`)
+        if (!dryRun) {
+            for (const event of events) {
+                this.#logger.debug(`Emitting event of type ${event.type}`)
 
-            await this.#emitter.emitDynamic(event.type, event.payload)
+                await this.#emitter.emitDynamic(event.type, event.payload)
+            }
         }
+
     }
 
     public async handleCommand(playerCommand: string) {

@@ -1,5 +1,4 @@
-import type ReadonlyFacade from './ecs'
-import type { EngineComponentSchema, Entity } from './ecs'
+import type { ReadonlyFacade, EngineComponentSchema, Entity } from './ecs'
 import type { EngineEvent } from './event-bus'
 
 export const ERR_INTENT_REJECTED = 'intent-rejected'
@@ -77,11 +76,11 @@ export interface IntentClassificationResponse {
 }
 
 
-export interface LawContext {
+export interface LawContext<ComponentSchema extends EngineComponentSchema> {
     dryRun: boolean
     actor?: Entity
     target?: Entity
-    ecsUtils: ReadonlyFacade
+    ecsUtils: ReadonlyFacade<ComponentSchema>
 
     // the list of auxiliaries (implements, tools, etc.) that the user
     // issued the command with, sorted in the order that produces
@@ -160,7 +159,7 @@ export interface Law<ComponentSchema extends EngineComponentSchema> {
     layer: LawLayer
     name: string
     intents: Array<string> // an array of the intent names that the Law cares about
-    apply: (ctx: LawContext) => Promise<Contribution<ComponentSchema>>
+    apply: (ctx: LawContext<ComponentSchema>) => Promise<Contribution<ComponentSchema>>
 
     /*
     the scenarios that the Law cares about. Given a player Intent,
