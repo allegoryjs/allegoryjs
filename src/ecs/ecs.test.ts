@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import ECS from '@/ecs/ecs'
-import type { EngineComponentSchema } from '@/ecs/ecs-types'
+import type { EngineComponentSchema } from '@/ecs/ecs.types'
 
 interface TestSchema extends EngineComponentSchema {
   position: { x: number; y: number }

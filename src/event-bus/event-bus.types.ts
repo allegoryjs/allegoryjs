@@ -1,4 +1,4 @@
-import type { Logger } from '@/logger/logger-types'
+import type { Logger } from '@/logger/logger.types'
 
 export type EventMap = Record<string, unknown>
 

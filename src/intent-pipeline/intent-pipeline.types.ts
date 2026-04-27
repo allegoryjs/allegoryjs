@@ -1,5 +1,5 @@
-import type { ReadonlyFacade, EngineComponentSchema, Entity } from '@/ecs/ecs-types'
-import type { EngineEvent } from '@/event-bus/event-bus-types'
+import type { ReadonlyFacade, EngineComponentSchema, Entity } from '@/ecs/ecs.types'
+import type { EngineEvent } from '@/event-bus/event-bus.types'
 
 export const ERR_INTENT_REJECTED = 'intent-rejected'
 

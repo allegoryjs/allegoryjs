@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, it, beforeEach } from 'bun:test'
 
 import type ECS from '@/ecs/ecs'
-import type { EngineComponentSchema } from '@/ecs/ecs-types'
+import type { EngineComponentSchema } from '@/ecs/ecs.types'
 import EventBus from '@/event-bus/event-bus'
 import { defaultEmitStreams } from '@/event-bus/event-bus'
 import IntentPipeline from '@/intent-pipeline/intent-pipeline'
@@ -12,10 +12,10 @@ import {
   type IntentClassificationResponse,
   type IntentPipelineConfig,
   type Law,
-} from '@/intent-pipeline/intent-pipeline-types'
+} from '@/intent-pipeline/intent-pipeline.types'
 import type LocalizationModule from '@/localization/localization'
 import { DefaultLogger } from '@/logger/logger'
-import type { Logger } from '@/logger/logger-types'
+import type { Logger } from '@/logger/logger.types'
 
 // --- Test-only ECS schema extension ---
 interface TestSchema extends EngineComponentSchema {

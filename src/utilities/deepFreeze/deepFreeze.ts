@@ -1,4 +1,4 @@
-import type { AnyObject } from './deepFreeze-types'
+import type { AnyObject } from './deepFreeze.types'
 
 const isObject = (value: unknown): value is object => {
   return typeof value === 'object' && value !== null

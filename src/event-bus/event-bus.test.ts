@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, spyOn } from 'bun:test'
 
 import EventBus, { WILDCARD } from '@/event-bus/event-bus'
-import type { EmitContext, Listener, EventMap } from '@/event-bus/event-bus-types'
+import type { EmitContext, Listener, EventMap } from '@/event-bus/event-bus.types'
 
 describe('EventBus', () => {
   let emitter: EventBus
