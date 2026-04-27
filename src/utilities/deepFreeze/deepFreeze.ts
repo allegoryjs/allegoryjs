@@ -1,4 +1,4 @@
-type AnyObject = Record<PropertyKey, unknown>
+import type { AnyObject } from './deepFreeze-types'
 
 const isObject = (value: unknown): value is object => {
   return typeof value === 'object' && value !== null

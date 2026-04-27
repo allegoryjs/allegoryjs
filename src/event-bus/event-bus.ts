@@ -1,4 +1,15 @@
-import { DefaultLogger, type Logger } from '@/logger/logger'
+import type {
+  EventMap,
+  DefaultEventMap,
+  EmitContext,
+  SubscribeOptions,
+  Listener,
+  ListenerEntry,
+  EventBusConfig,
+  Disposer,
+} from '@/event-bus/event-bus-types'
+import { DefaultLogger } from '@/logger/logger'
+import type { Logger } from '@/logger/logger-types'
 
 export const defaultEmitStreams = {
   narrate: 'narrate',
@@ -6,53 +17,7 @@ export const defaultEmitStreams = {
 
 export const WILDCARD = '*'
 
-export type EventMap = Record<string, unknown>
-
-export interface DefaultEventMap {
-  [key: string]: unknown
-  narrate: string[]
-}
-
-export interface EngineEvent {
-  type: string
-  payload?: unknown
-  timestamp?: number
-  source?: string
-  cancelable?: boolean
-}
-
-export interface EmitContext<P = unknown> {
-  type: string
-  payload: P
-  timestamp: number
-  cancelled: boolean
-
-  cancel(): void
-}
-
-export interface SubscribeOptions {
-  priority?: number
-  once?: boolean
-}
-
-export type Listener<P = unknown> = (payload: P, ctx: EmitContext<P>) => void | Promise<void>
-
-interface ListenerEntry {
-  callback: Listener<any>
-  priority: number
-  once: boolean
-}
-
-export interface EventBusConfig {
-  maxListeners?: number
-  enableBuffering?: boolean
-  logger?: Logger
-  onError?: (error: unknown, stream: string, listener: Listener<any>) => void
-}
-
 const DEFAULT_MAX_LISTENERS = 50
-
-export type Disposer = () => void
 
 export default class EventBus<T extends EventMap = DefaultEventMap> {
   #listeners = new Map<string, ListenerEntry[]>()
@@ -104,7 +69,7 @@ export default class EventBus<T extends EventMap = DefaultEventMap> {
       this.#buffer.delete(stream)
 
       for (const ctx of buffered) {
-        this.#invokeListener(entry, stream, ctx)
+        void this.#invokeListener(entry, stream, ctx)
       }
     }
 

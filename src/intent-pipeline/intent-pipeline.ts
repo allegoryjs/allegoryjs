@@ -1,7 +1,8 @@
 import type ECS from '@/ecs/ecs'
-import type { EngineComponentSchema, Entity } from '@/ecs/ecs'
+import type { EngineComponentSchema, Entity } from '@/ecs/ecs-types'
 import type EventBus from '@/event-bus/event-bus'
-import { defaultEmitStreams, type EngineEvent } from '@/event-bus/event-bus'
+import { defaultEmitStreams } from '@/event-bus/event-bus'
+import type { EngineEvent } from '@/event-bus/event-bus-types'
 import {
   ContributionStatus,
   ERR_INTENT_REJECTED,
@@ -19,7 +20,8 @@ import type {
   MutationOp,
 } from '@/intent-pipeline/intent-pipeline-types'
 import type LocalizationModule from '@/localization/localization'
-import { DefaultLogger, type Logger } from '@/logger/logger'
+import { DefaultLogger } from '@/logger/logger'
+import type { Logger } from '@/logger/logger-types'
 
 export default class IntentPipeline<
   ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
@@ -43,7 +45,7 @@ export default class IntentPipeline<
     this.#emitter = emitter
     this.#ecs = ecs
     this.#config = config
-    this.#t = localizationModule.$t
+    this.#t = localizationModule.$t.bind(this)
     this.#intentClassificationModule = intentClassificationModule
     this.#laws = new Map()
     this.#logger = logger ?? new DefaultLogger()
