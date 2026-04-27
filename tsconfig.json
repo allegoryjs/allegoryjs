@@ -7,9 +7,10 @@
     "moduleDetection": "force",
     "jsx": "react-jsx",
     "allowJs": true,
-    "types": [
-      "bun"
-    ],
+    "types": ["bun"],
+    "paths": {
+      "@/*": ["./src/*"]
+    },
 
     // Bundler mode
     "moduleResolution": "bundler",
@@ -22,6 +23,6 @@
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
+    "noImplicitOverride": true
   }
 }

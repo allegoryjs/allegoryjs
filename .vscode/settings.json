@@ -1,0 +1,4 @@
+{
+  "oxc.enable.oxlint": true,
+  "oxc.enable.oxfmt": true
+}
