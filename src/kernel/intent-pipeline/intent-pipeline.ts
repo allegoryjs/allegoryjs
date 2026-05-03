@@ -22,7 +22,13 @@ import type {
   LawContext,
   MutationOp,
 } from '@/kernel/intent-pipeline/intent-pipeline.types'
-
+/**
+ * The IntentPipeline coordinates the transformation of user commands into actionable engine effects.
+ * It manages intent classification, auctions those intents to registered "Laws" to determine the
+ * best course of action, and executes the resulting state mutations, narrations, and events.
+ *
+ * Emits 'engine.unknown_command' on the 'narrate' event stream when a user's command is determined to be unknown/not actionable
+ */
 export default class IntentPipeline<
   ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
 > {
