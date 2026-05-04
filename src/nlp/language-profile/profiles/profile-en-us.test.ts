@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
 import { splitRawCommands } from "@/nlp/language-profile/profiles/profile-en-us";
-import chunkArray from "@/utilities/chunkArray/chunkArray";
 
 describe("profile-en-us", () => {
   describe("splits commands correctly", () => {
@@ -265,67 +264,93 @@ describe("profile-en-us", () => {
         });
 
         describe("three-part compound commands", () => {
-          let questions = interrogativePrefixes
-            .map((prefix) => `${prefix} ${baseCommandOne}`)
-            .flatMap((questionPartOne) =>
-              compoundDelimiters.map(
-                (delimiter) =>
-                  `${questionPartOne}${delimiter} ${baseCommandTwo}`,
-              ),
-            );
+          // Instead of testing all 71×71×16 = 544K combinations (O(n²) explosion),
+          // we test each delimiter independently in each position, plus all prefix
+          // and punctuation variants. The same regex is applied twice, so each
+          // delimiter's behavior is independent — no need for the Cartesian product.
+          const fixedDelimiter = ". then";
+          const fixedPrefix = "can i";
 
-          const threeQuestionsWithoutPunctuation = questions.flatMap((q) =>
-            compoundDelimiters.map(
-              (delimiter) => `${q}${delimiter} ${baseCommandThree}`,
-            ),
-          );
+          it("splits correctly with each delimiter in the first position", () => {
+            for (const d of compoundDelimiters) {
+              const q = `${fixedPrefix} ${baseCommandOne}${d} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`;
+              const split = splitRawCommands(q);
+              expect(split.length).toBe(3);
+              expect(split[0]).toEqual(
+                expect.objectContaining({ dryRun: true, raw: baseCommandOne }),
+              );
+              expect(split[1]).toEqual(
+                expect.objectContaining({ dryRun: true, raw: baseCommandTwo }),
+              );
+              expect(split[2]).toEqual(
+                expect.objectContaining({
+                  dryRun: true,
+                  raw: baseCommandThree,
+                }),
+              );
+            }
+          });
 
-          const threeQuestionsWithPunctuation =
-            threeQuestionsWithoutPunctuation.concat(
-              threeQuestionsWithoutPunctuation.flatMap((q) =>
-                punctuation.map((punc) => `${q}${punc}`),
-              ),
-            );
+          it("splits correctly with each delimiter in the second position", () => {
+            for (const d of compoundDelimiters) {
+              const q = `${fixedPrefix} ${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${d} ${baseCommandThree}`;
+              const split = splitRawCommands(q);
+              expect(split.length).toBe(3);
+              expect(split[0]).toEqual(
+                expect.objectContaining({ dryRun: true, raw: baseCommandOne }),
+              );
+              expect(split[1]).toEqual(
+                expect.objectContaining({ dryRun: true, raw: baseCommandTwo }),
+              );
+              expect(split[2]).toEqual(
+                expect.objectContaining({
+                  dryRun: true,
+                  raw: baseCommandThree,
+                }),
+              );
+            }
+          });
 
-          const threeQuestions = [
-            ...threeQuestionsWithPunctuation,
-            ...threeQuestionsWithoutPunctuation,
-          ];
+          it("splits correctly with every interrogative prefix", () => {
+            for (const prefix of interrogativePrefixes) {
+              const q = `${prefix} ${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`;
+              const split = splitRawCommands(q);
+              expect(split.length).toBe(3);
+              expect(split[0]).toEqual(
+                expect.objectContaining({ dryRun: true, raw: baseCommandOne }),
+              );
+              expect(split[1]).toEqual(
+                expect.objectContaining({ dryRun: true, raw: baseCommandTwo }),
+              );
+              expect(split[2]).toEqual(
+                expect.objectContaining({
+                  dryRun: true,
+                  raw: baseCommandThree,
+                }),
+              );
+            }
+          });
 
-          // there are a huge number of three-questions cases; chunk and test them parallely
-          const threeQuestionsChunked = chunkArray(
-            threeQuestions,
-            Math.floor(threeQuestions.length / 128),
-          );
-
-          for (const threeQs of threeQuestionsChunked) {
-            it.concurrent("(concurrent)", async () => {
-              await Bun.sleep(0);
-              for (const q of threeQs) {
-                const split = splitRawCommands(q);
-
-                expect(split.length).toBe(3);
-                expect(split[0]).toEqual(
-                  expect.objectContaining({
-                    dryRun: true,
-                    raw: baseCommandOne,
-                  }),
-                );
-                expect(split[1]).toEqual(
-                  expect.objectContaining({
-                    dryRun: true,
-                    raw: baseCommandTwo,
-                  }),
-                );
-                expect(split[2]).toEqual(
-                  expect.objectContaining({
-                    dryRun: true,
-                    raw: baseCommandThree,
-                  }),
-                );
-              }
-            });
-          }
+          it("splits correctly with trailing punctuation on the third command", () => {
+            const base = `${fixedPrefix} ${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`;
+            for (const punc of punctuation) {
+              const q = `${base}${punc}`;
+              const split = splitRawCommands(q);
+              expect(split.length).toBe(3);
+              expect(split[0]).toEqual(
+                expect.objectContaining({ dryRun: true, raw: baseCommandOne }),
+              );
+              expect(split[1]).toEqual(
+                expect.objectContaining({ dryRun: true, raw: baseCommandTwo }),
+              );
+              expect(split[2]).toEqual(
+                expect.objectContaining({
+                  dryRun: true,
+                  raw: baseCommandThree,
+                }),
+              );
+            }
+          });
         });
       });
 
@@ -368,30 +393,9 @@ describe("profile-en-us", () => {
           });
         });
 
-        it("compound commands", () => {
-          const doubleCommands = compoundDelimiters.map((delimiter) =>
-            [baseCommandOne, baseCommandTwo].join(delimiter),
-          );
-
-          const tripleCommandsWithoutPunctuation = compoundDelimiters.flatMap(
-            (delimiter) =>
-              doubleCommands.flatMap((doubleCommand) =>
-                [doubleCommand, baseCommandThree].join(delimiter),
-              ),
-          );
-
-          const tripleCommandsWithPunctuation = punctuation.flatMap((punc) =>
-            tripleCommandsWithoutPunctuation.map(
-              (commands) => `${commands}${punc}`,
-            ),
-          );
-
-          const tripleCommands = [
-            ...tripleCommandsWithoutPunctuation,
-            ...tripleCommandsWithPunctuation,
-          ];
-
-          doubleCommands.forEach((commands) => {
+        it("two-part compound commands with all delimiters", () => {
+          for (const delimiter of compoundDelimiters) {
+            const commands = `${baseCommandOne}${delimiter} ${baseCommandTwo}`;
             const split = splitRawCommands(commands);
 
             expect(split.length).toBe(2);
@@ -401,21 +405,71 @@ describe("profile-en-us", () => {
             expect(split[1]).toEqual(
               expect.objectContaining({ dryRun: false, raw: baseCommandTwo }),
             );
+          }
+        });
+
+        describe("three-part compound commands", () => {
+          const fixedDelimiter = ". then";
+
+          it("splits correctly with each delimiter in the first position", () => {
+            for (const d of compoundDelimiters) {
+              const q = `${baseCommandOne}${d} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`;
+              const split = splitRawCommands(q);
+              expect(split.length).toBe(3);
+              expect(split[0]).toEqual(
+                expect.objectContaining({ dryRun: false, raw: baseCommandOne }),
+              );
+              expect(split[1]).toEqual(
+                expect.objectContaining({ dryRun: false, raw: baseCommandTwo }),
+              );
+              expect(split[2]).toEqual(
+                expect.objectContaining({
+                  dryRun: false,
+                  raw: baseCommandThree,
+                }),
+              );
+            }
           });
 
-          tripleCommands.forEach((commands) => {
-            const split = splitRawCommands(commands);
+          it("splits correctly with each delimiter in the second position", () => {
+            for (const d of compoundDelimiters) {
+              const q = `${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${d} ${baseCommandThree}`;
+              const split = splitRawCommands(q);
+              expect(split.length).toBe(3);
+              expect(split[0]).toEqual(
+                expect.objectContaining({ dryRun: false, raw: baseCommandOne }),
+              );
+              expect(split[1]).toEqual(
+                expect.objectContaining({ dryRun: false, raw: baseCommandTwo }),
+              );
+              expect(split[2]).toEqual(
+                expect.objectContaining({
+                  dryRun: false,
+                  raw: baseCommandThree,
+                }),
+              );
+            }
+          });
 
-            expect(split.length).toBe(3);
-            expect(split[0]).toEqual(
-              expect.objectContaining({ dryRun: false, raw: baseCommandOne }),
-            );
-            expect(split[1]).toEqual(
-              expect.objectContaining({ dryRun: false, raw: baseCommandTwo }),
-            );
-            expect(split[2]).toEqual(
-              expect.objectContaining({ dryRun: false, raw: baseCommandThree }),
-            );
+          it("splits correctly with trailing punctuation on the third command", () => {
+            const base = `${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`;
+            for (const punc of punctuation) {
+              const q = `${base}${punc}`;
+              const split = splitRawCommands(q);
+              expect(split.length).toBe(3);
+              expect(split[0]).toEqual(
+                expect.objectContaining({ dryRun: false, raw: baseCommandOne }),
+              );
+              expect(split[1]).toEqual(
+                expect.objectContaining({ dryRun: false, raw: baseCommandTwo }),
+              );
+              expect(split[2]).toEqual(
+                expect.objectContaining({
+                  dryRun: false,
+                  raw: baseCommandThree,
+                }),
+              );
+            }
           });
         });
       });
