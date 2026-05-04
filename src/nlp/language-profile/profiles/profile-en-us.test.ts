@@ -299,7 +299,8 @@ describe("profile-en-us", () => {
           );
 
           for (const threeQs of threeQuestionsChunked) {
-            it.concurrent("(concurrent)", () => {
+            it.concurrent("(concurrent)", async () => {
+              await Bun.sleep(0);
               for (const q of threeQs) {
                 const split = splitRawCommands(q);
 
@@ -323,7 +324,6 @@ describe("profile-en-us", () => {
                   }),
                 );
               }
-              threeQs.forEach((q) => {});
             });
           }
         });
