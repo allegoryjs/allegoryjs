@@ -1,5 +1,6 @@
 import type { EngineEvent } from '@/helpers/event-bus/event-bus.types'
 import type { ReadonlyFacade, EngineComponentSchema, Entity } from '@/kernel/ecs/ecs.types'
+import type { LawContext } from '@/kernel/intent-pipeline/intent-pipeline'
 
 export const ERR_INTENT_REJECTED = 'intent-rejected'
 
@@ -61,8 +62,8 @@ export const defaultPipelineConfig: IntentPipelineConfig = Object.freeze({
 
 export interface Intent {
   name: string
-  actor?: Entity
-  target?: Entity
+  actors?: Array<Entity>
+  targets?: Array<Entity>
 
   // any tools or implements or other related entities
   auxiliary?: Array<Entity>
@@ -74,20 +75,13 @@ export interface IntentClassificationResponse {
   dryRun: boolean
 }
 
-export interface LawContext<ComponentSchema extends EngineComponentSchema> {
+export interface LawContextOpts<ComponentSchema extends EngineComponentSchema> { 
   dryRun: boolean
-  actor?: Entity
-  target?: Entity
+  actors?: Array<Entity>
+  targets?: Array<Entity>
   ecsUtils: ReadonlyFacade<ComponentSchema>
-
-  // the list of auxiliaries (implements, tools, etc.) that the user
-  // issued the command with, sorted in the order that produces
-  // the highest specificity for the given Law (tie goes to user order)
-  auxiliary?: Entity[]
-
-  // the list of auxiliaries as they originally appeared in the
-  // user's command, in case the Law cares about the actual order
-  originalAuxiliaries?: Entity[]
+  auxiliary?: Array<Entity>
+  originalAuxiliaries?: Array<Entity>
 }
 
 export type EntityRef = Entity | string
@@ -137,7 +131,7 @@ export interface LawConcern<ComponentSchema extends EngineComponentSchema> {
 export interface LawBid<ComponentSchema extends EngineComponentSchema> {
   law: Law<ComponentSchema>
   score: number
-  reorderedAuxiliaries?: Entity[]
+  reorderedAuxiliaries?: Array<Entity>
 }
 
 // a matcher represents a scenario that a Law cares about

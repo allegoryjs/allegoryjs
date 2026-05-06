@@ -5,7 +5,7 @@ import type LocalizationModule from '@/helpers/localization/localization'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
-import type { EngineComponentSchema, Entity } from '@/kernel/ecs/ecs.types'
+import type { EngineComponentSchema, Entity, ReadonlyFacade } from '@/kernel/ecs/ecs.types'
 import {
   ContributionStatus,
   ERR_INTENT_REJECTED,
@@ -19,7 +19,7 @@ import type {
   Law,
   LawBid,
   LawConcern,
-  LawContext,
+  LawContextOpts,
   MutationOp,
 } from '@/kernel/intent-pipeline/intent-pipeline.types'
 /**
@@ -184,11 +184,11 @@ export default class IntentPipeline<
 
   // returns the specificity of the highest scoring matched scenario
   #calculateBid(law: Law<ComponentSchema>, intent: Intent): LawBid<ComponentSchema> | null {
-    const { name, actor, target, auxiliary } = intent
+    const { name, actors, targets, auxiliary } = intent
 
     this.#logger.info(`Calculating bid for Law ${law.name} for intent ${name}`)
     this.#logger.debug(
-      `Intent name: ${name}, actor: ${actor}, target: ${target}, auxiliary(s): ${auxiliary?.join(', ')}`,
+      `Intent name: ${name}, actors: ${actors?.join(', ') ?? '(none)'}, targets: ${targets?.join(', ') ?? '(none)'}, auxiliaries: ${auxiliary?.join(', ') ?? '(none)'}`,
     )
 
     if (!law.intents.includes(name)) {
@@ -202,12 +202,36 @@ export default class IntentPipeline<
       ({ actor: actorConcern, target: targetConcern, auxiliary: auxConcerns }, matcherIndex) => {
         this.#logger.debug(`Checking matcher ${matcherIndex} for Law ${law.name}`)
 
-        const actorScore =
-          actor && actorConcern ? this.#calculateConcernSpecificity(actor, actorConcern) : 0
+        let actorScore = 0
+        if (actorConcern && actors && actors.length > 0) {
+          for (const a of actors) {
+            const score = this.#calculateConcernSpecificity(a, actorConcern)
+            if (score < 0) {
+              actorScore = -1; // One actor fails, the whole group fails
+              break
+            }
+            actorScore = score; // Capture the specificity score once
+          }
+        } else if (actorConcern && (!actors || actors.length === 0)) {
+          // The law requires an actor, but the intent didn't provide one
+          actorScore = -1
+        }
         this.#logger.debug(`Actor score: ${actorScore}`)
-
-        const targetScore =
-          target && targetConcern ? this.#calculateConcernSpecificity(target, targetConcern) : 0
+    
+        let targetScore = 0
+        if (targetConcern && targets && targets.length > 0) {
+          for (const t of targets) {
+            const score = this.#calculateConcernSpecificity(t, targetConcern)
+            if (score < 0) {
+              targetScore = -1; // One target fails, the whole group fails
+              break
+            }
+            targetScore = score; // Capture the specificity score once
+          }
+        } else if (targetConcern && (!targets || targets.length === 0)) {
+          // The law requires a target, but the intent didn't provide one
+          targetScore = -1
+        }
         this.#logger.debug(`Target score: ${targetScore}`)
 
         // to find the correct score for auxiliary entities, we need to look at all
@@ -357,14 +381,14 @@ export default class IntentPipeline<
         )
       }
 
-      const lawCtx: LawContext<ComponentSchema> = {
-        actor: intent.actor,
-        target: intent.target,
+      const lawCtx = new LawContext<ComponentSchema>({
+        actors: intent.actors,
+        targets: intent.targets,
         auxiliary: reorderedAuxiliaries,
         originalAuxiliaries: intent.auxiliary,
         ecsUtils: this.#ecs.getReadonlyFacade(),
         dryRun,
-      }
+      })
 
       const result = await law.apply(lawCtx)
 
@@ -625,5 +649,59 @@ export default class IntentPipeline<
 
     this.#logger.info(`Repealing Law ${name}`)
     this.#laws.delete(name)
+  }
+}
+
+
+export class LawContext<ComponentSchema extends EngineComponentSchema> {
+  readonly dryRun: boolean
+  readonly actors?: Array<Entity>
+  readonly targets?: Array<Entity>
+  readonly ecsUtils: ReadonlyFacade<ComponentSchema>
+
+  // the list of auxiliaries (implements, tools, etc.) that the user
+  // issued the command with, sorted in the order that produces
+  // the highest specificity for the given Law (tie goes to user order)
+  readonly auxiliary?: Array<Entity>
+
+  // the list of auxiliaries as they originally appeared in the
+  // user's command, in case the Law cares about the actual order
+  readonly originalAuxiliaries?: Array<Entity>
+
+  constructor({
+    dryRun,
+    actors,
+    targets,
+    ecsUtils,
+    auxiliary,
+    originalAuxiliaries,
+  }: LawContextOpts<ComponentSchema>) { 
+    this.dryRun = dryRun
+    this.actors = actors
+    this.targets = targets
+    this.ecsUtils = ecsUtils
+    this.auxiliary = auxiliary
+    this.originalAuxiliaries = originalAuxiliaries
+  }
+
+  /**
+   * Ergonomic getter for the actor, since there will typically be one actor
+   */
+  get actor(): Entity | undefined {
+    return this.actors?.[0]
+  }
+
+  /**
+   * Ergonomic getter for the target, since there will typically be one target
+   */
+  get target(): Entity | undefined {
+    return this.targets?.[0]
+  }
+
+  /**
+   * Ergonomic getter for the aux/tool, since there will typically be zero or one aux
+   */
+  get aux(): Entity | undefined { 
+    return this.auxiliary?.[0]
   }
 }
