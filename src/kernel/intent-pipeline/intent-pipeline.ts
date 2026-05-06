@@ -207,10 +207,10 @@ export default class IntentPipeline<
           for (const a of actors) {
             const score = this.#calculateConcernSpecificity(a, actorConcern)
             if (score < 0) {
-              actorScore = -1; // One actor fails, the whole group fails
+              actorScore = -1 // One actor fails, the whole group fails
               break
             }
-            actorScore = score; // Capture the specificity score once
+            actorScore = Math.max(actorScore, score) // Order-independent: capture highest specificity
           }
         } else if (actorConcern && (!actors || actors.length === 0)) {
           // The law requires an actor, but the intent didn't provide one
@@ -223,10 +223,10 @@ export default class IntentPipeline<
           for (const t of targets) {
             const score = this.#calculateConcernSpecificity(t, targetConcern)
             if (score < 0) {
-              targetScore = -1; // One target fails, the whole group fails
+              targetScore = -1 // One target fails, the whole group fails
               break
             }
-            targetScore = score; // Capture the specificity score once
+            targetScore = Math.max(targetScore, score) // Order-independent: capture highest specificity
           }
         } else if (targetConcern && (!targets || targets.length === 0)) {
           // The law requires a target, but the intent didn't provide one

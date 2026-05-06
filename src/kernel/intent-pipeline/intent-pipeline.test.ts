@@ -197,7 +197,7 @@ describe('Intent Pipeline', () => {
               dryRun: false,
               intent: {
                 name: intentName,
-                actor: actorEntityId,
+                actors: [actorEntityId],
               },
             },
           ] satisfies Array<IntentClassificationResponse>,
@@ -212,7 +212,7 @@ describe('Intent Pipeline', () => {
       expect(lawApplyMock).toHaveBeenCalledWith(
         expect.objectContaining({
           dryRun: false,
-          actor: actorEntityId,
+          actors: [actorEntityId],
         }),
       )
       expect(mockEcs.entityExists).toHaveBeenCalledTimes(1)
@@ -253,9 +253,8 @@ describe('Intent Pipeline', () => {
           dryRun: false,
           intent: {
             name: intentName,
-            actor: actorEntityId,
-          },
-        },
+            actors: [actorEntityId],
+          },        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       await ip.handleCommand('layer test')
@@ -293,9 +292,8 @@ describe('Intent Pipeline', () => {
           dryRun: false,
           intent: {
             name: intentName,
-            actor: actorEntityId,
-          },
-        },
+            actors: [actorEntityId],
+          },        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       await ip.handleCommand('layer fallback test')
@@ -324,9 +322,8 @@ describe('Intent Pipeline', () => {
           dryRun: false,
           intent: {
             name: intentName,
-            actor: actorEntityId,
-          },
-        },
+            actors: [actorEntityId],
+          },        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       await ip.handleCommand('repeal test')
@@ -353,9 +350,8 @@ describe('Intent Pipeline', () => {
           dryRun: false,
           intent: {
             name: intentName,
-            actor: actorEntityId,
-          },
-        },
+            actors: [actorEntityId],
+          },        },
       ])
       mockEcs.entityHasComponent.mockImplementation(
         (entity, comp) => entity === actorEntityId && comp === 'TestComponent',
@@ -393,9 +389,8 @@ describe('Intent Pipeline', () => {
           dryRun: false,
           intent: {
             name: intentName,
-            actor: actorEntityId,
-          },
-        },
+            actors: [actorEntityId],
+          },        },
       ])
       mockEcs.isComponent.mockImplementation((comp) => comp === 'TestComponent')
       mockEcs.getEntityComponentData.mockImplementation((entity, comp) =>
@@ -423,9 +418,8 @@ describe('Intent Pipeline', () => {
           dryRun: false,
           intent: {
             name: intentName,
-            actor: actorEntityId,
-          },
-        },
+            actors: [actorEntityId],
+          },        },
       ])
       mockEcs.entityHasTag.mockImplementation(
         (entity, tag) => entity === actorEntityId && tag === 'special',
@@ -458,9 +452,8 @@ describe('Intent Pipeline', () => {
           dryRun: true,
           intent: {
             name: intentName,
-            actor: actorEntityId,
-          },
-        },
+            actors: [actorEntityId],
+          },        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       await ip.handleCommand('dry run test')
@@ -502,9 +495,8 @@ describe('Intent Pipeline', () => {
           dryRun: true,
           intent: {
             name: intentName,
-            actor: actorEntityId,
-          },
-        },
+            actors: [actorEntityId],
+          },        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       mockI18n.$t.mockImplementation((s: string) => s)
@@ -558,9 +550,8 @@ describe('Intent Pipeline', () => {
           dryRun: false,
           intent: {
             name: intentName,
-            actor: actorEntityId,
-          },
-        },
+            actors: [actorEntityId],
+          },        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       mockI18n.$t.mockImplementation((s: string) => s)
@@ -588,7 +579,7 @@ describe('Intent Pipeline', () => {
           dryRun: false,
           intent: {
             name: 'NO_LAW_INTENT',
-            actor: 8,
+            actors: [8],
           },
         },
       ])
@@ -623,9 +614,8 @@ describe('Intent Pipeline', () => {
           dryRun: false,
           intent: {
             name: intentName,
-            actor: actorEntityId,
-          },
-        },
+            actors: [actorEntityId],
+          },        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       await ip.handleCommand('multi match test')
@@ -663,9 +653,8 @@ describe('Intent Pipeline', () => {
           dryRun: false,
           intent: {
             name: intentName,
-            actor: actorEntityId,
-          },
-        },
+            actors: [actorEntityId],
+          },        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       await ip.handleCommand('conflict test')
@@ -925,6 +914,200 @@ describe('Intent Pipeline', () => {
       await ip.handleCommand('reject loop')
       expect(apply1).toHaveBeenCalled()
       expect(apply2).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Multiple actors and targets', () => {
+    it('matches when all actors and targets satisfy their respective concerns', async () => {
+      const intentName = 'MULTI_ENTITY_INTENT'
+      const actors = [10, 11]
+      const targets = [20, 21]
+      const lawApply = mock().mockImplementationOnce(() => ({ status: ContributionStatus.completed }))
+
+      ip.ratifyLaw({
+        layer: LawLayer.Core,
+        name: 'multi-entity-law',
+        intents: [intentName],
+        apply: lawApply,
+        matchers: [
+          {
+            actor: { tags: ['actor-tag'] },
+            target: { tags: ['target-tag'] },
+          },
+        ],
+      })
+
+      mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [
+        {
+          confidence: 1,
+          intent: {
+            name: intentName,
+            actors,
+            targets,
+          },
+        },
+      ])
+
+      mockEcs.entityExists.mockImplementation(() => true)
+      mockEcs.entityHasTag.mockImplementation((entity, tag) => {
+        if (tag === 'actor-tag') return actors.includes(entity)
+        if (tag === 'target-tag') return targets.includes(entity)
+        return false
+      })
+
+      await ip.handleCommand('multi entity command')
+      expect(lawApply).toHaveBeenCalled()
+    })
+
+    it('fails to match if any actor does not satisfy the actor concern', async () => {
+      const intentName = 'MULTI_ACTOR_FAIL_INTENT'
+      const actors = [10, 11] // 11 will fail
+      const lawApply = mock()
+
+      ip.ratifyLaw({
+        layer: LawLayer.Core,
+        name: 'multi-actor-fail-law',
+        intents: [intentName],
+        apply: lawApply,
+        matchers: [{ actor: { tags: ['actor-tag'] } }],
+      })
+
+      mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [
+        {
+          confidence: 1,
+          intent: {
+            name: intentName,
+            actors,
+          },
+        },
+      ])
+
+      mockEcs.entityExists.mockImplementation(() => true)
+      mockEcs.entityHasTag.mockImplementation((entity, tag) => {
+        return entity === 10 && tag === 'actor-tag'
+      })
+
+      await ip.handleCommand('multi actor fail')
+      expect(lawApply).not.toHaveBeenCalled()
+    })
+
+    it('ensures ordering of actors does not affect which law wins the bid', async () => {
+      const intentName = 'BIDDING_ORDER_INTENT'
+      const a_specific = 10
+      const a_generic = 11
+
+      const lawSpecificApply = mock().mockImplementation(() => ({ status: ContributionStatus.completed }))
+      const lawGenericApply = mock().mockImplementation(() => ({ status: ContributionStatus.completed }))
+
+      // Law Generic: cares only about Tag1 (Specificity 2.5)
+      ip.ratifyLaw({
+        layer: LawLayer.Core,
+        name: 'law-generic',
+        intents: [intentName],
+        apply: lawGenericApply,
+        matchers: [{ actor: { tags: ['tag1'] } }],
+      })
+
+      // Law Specific: cares about Tag1 and Tag2 (Specificity 5.0)
+      ip.ratifyLaw({
+        layer: LawLayer.Core,
+        name: 'law-specific',
+        intents: [intentName],
+        apply: lawSpecificApply,
+        matchers: [{ actor: { tags: ['tag1', 'tag2'] } }],
+      })
+
+      mockEcs.entityExists.mockImplementation(() => true)
+      mockEcs.entityHasTag.mockImplementation((entity, tag) => {
+        if (entity === a_specific) return ['tag1', 'tag2'].includes(tag)
+        if (entity === a_generic) return tag === 'tag1'
+        return false
+      })
+
+      // Test Case 1: [a_generic, a_specific]
+      // law-specific score: score(a_specific) = 5.0
+      // law-generic score: score(a_specific) = 2.5
+      // law-specific should win
+      mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [
+        {
+          confidence: 1,
+          intent: { name: intentName, actors: [a_generic, a_specific] },
+        },
+      ])
+      await ip.handleCommand('order 1')
+      expect(lawSpecificApply).toHaveBeenCalled()
+      expect(lawGenericApply).not.toHaveBeenCalled()
+
+      lawSpecificApply.mockClear()
+      lawGenericApply.mockClear()
+
+      // Test Case 2: [a_specific, a_generic]
+      // law-specific score: score(a_generic) = 5.0 (Wait, in current bugged logic it's 2.5)
+      // law-generic score: score(a_generic) = 2.5
+      // law-specific should STILL win if order independent
+      mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [
+        {
+          confidence: 1,
+          intent: { name: intentName, actors: [a_specific, a_generic] },
+        },
+      ])
+      await ip.handleCommand('order 2')
+      expect(lawSpecificApply).toHaveBeenCalled()
+      expect(lawGenericApply).not.toHaveBeenCalled()
+    })
+
+    it('ensures ordering of targets does not affect which law wins the bid', async () => {
+      const intentName = 'TARGET_BIDDING_ORDER_INTENT'
+      const t_specific = 20
+      const t_generic = 21
+
+      const lawSpecificApply = mock().mockImplementation(() => ({ status: ContributionStatus.completed }))
+      const lawGenericApply = mock().mockImplementation(() => ({ status: ContributionStatus.completed }))
+
+      ip.ratifyLaw({
+        layer: LawLayer.Core,
+        name: 'target-law-generic',
+        intents: [intentName],
+        apply: lawGenericApply,
+        matchers: [{ target: { tags: ['tag1'] } }],
+      })
+
+      ip.ratifyLaw({
+        layer: LawLayer.Core,
+        name: 'target-law-specific',
+        intents: [intentName],
+        apply: lawSpecificApply,
+        matchers: [{ target: { tags: ['tag1', 'tag2'] } }],
+      })
+
+      mockEcs.entityExists.mockImplementation(() => true)
+      mockEcs.entityHasTag.mockImplementation((entity, tag) => {
+        if (entity === t_specific) return ['tag1', 'tag2'].includes(tag)
+        if (entity === t_generic) return tag === 'tag1'
+        return false
+      })
+
+      // Test Case 1: [t_generic, t_specific]
+      mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [
+        {
+          confidence: 1,
+          intent: { name: intentName, targets: [t_generic, t_specific] },
+        },
+      ])
+      await ip.handleCommand('target order 1')
+      expect(lawSpecificApply).toHaveBeenCalled()
+
+      lawSpecificApply.mockClear()
+
+      // Test Case 2: [t_specific, t_generic]
+      mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [
+        {
+          confidence: 1,
+          intent: { name: intentName, targets: [t_specific, t_generic] },
+        },
+      ])
+      await ip.handleCommand('target order 2')
+      expect(lawSpecificApply).toHaveBeenCalled()
     })
   })
 })
