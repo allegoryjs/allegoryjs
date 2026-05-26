@@ -75,7 +75,7 @@ export interface IntentClassificationResponse {
   dryRun: boolean
 }
 
-export interface LawContextOpts<ComponentSchema extends EngineComponentSchema> { 
+export interface LawContextOpts<ComponentSchema extends EngineComponentSchema> {
   dryRun: boolean
   actors?: Array<Entity>
   targets?: Array<Entity>

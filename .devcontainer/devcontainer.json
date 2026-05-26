@@ -1,0 +1,35 @@
+{
+  "name": "Allegory.js",
+  "image": "ghcr.io/nhaef/devcontainer-bun:latest",
+  "features": {
+    "ghcr.io/shyim/devcontainers-features/bun:0": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "oxc.oxc-vscode", // The official Oxc extension
+        "ovreiu.bun-vscode"
+      ],
+      "settings": {
+        // Disable built-in VS Code JS/TS formatting so Oxc takes over
+        "js.format.enable": false,
+        "ts.format.enable": false,
+
+        // Set Oxc as the default formatter
+        "editor.defaultFormatter": "oxc.oxc-vscode",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.oxc": "always"
+        },
+
+        // Explicitly disable ESLint/Prettier if the user has them globally
+        "eslint.enable": false,
+        "prettier.enable": false,
+
+        "chat.disableAIFeatures": true
+      }
+    }
+  },
+
+  "postCreateCommand": "bun install"
+}

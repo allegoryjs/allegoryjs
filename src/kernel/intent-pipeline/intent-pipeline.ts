@@ -217,7 +217,7 @@ export default class IntentPipeline<
           actorScore = -1
         }
         this.#logger.debug(`Actor score: ${actorScore}`)
-    
+
         let targetScore = 0
         if (targetConcern && targets && targets.length > 0) {
           for (const t of targets) {
@@ -652,7 +652,6 @@ export default class IntentPipeline<
   }
 }
 
-
 export class LawContext<ComponentSchema extends EngineComponentSchema> {
   readonly dryRun: boolean
   readonly actors?: Array<Entity>
@@ -675,7 +674,7 @@ export class LawContext<ComponentSchema extends EngineComponentSchema> {
     ecsUtils,
     auxiliary,
     originalAuxiliaries,
-  }: LawContextOpts<ComponentSchema>) { 
+  }: LawContextOpts<ComponentSchema>) {
     this.dryRun = dryRun
     this.actors = actors
     this.targets = targets
@@ -701,7 +700,7 @@ export class LawContext<ComponentSchema extends EngineComponentSchema> {
   /**
    * Ergonomic getter for the aux/tool, since there will typically be zero or one aux
    */
-  get aux(): Entity | undefined { 
+  get aux(): Entity | undefined {
     return this.auxiliary?.[0]
   }
 }

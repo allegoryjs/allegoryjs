@@ -254,7 +254,8 @@ describe('Intent Pipeline', () => {
           intent: {
             name: intentName,
             actors: [actorEntityId],
-          },        },
+          },
+        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       await ip.handleCommand('layer test')
@@ -293,7 +294,8 @@ describe('Intent Pipeline', () => {
           intent: {
             name: intentName,
             actors: [actorEntityId],
-          },        },
+          },
+        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       await ip.handleCommand('layer fallback test')
@@ -323,7 +325,8 @@ describe('Intent Pipeline', () => {
           intent: {
             name: intentName,
             actors: [actorEntityId],
-          },        },
+          },
+        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       await ip.handleCommand('repeal test')
@@ -351,7 +354,8 @@ describe('Intent Pipeline', () => {
           intent: {
             name: intentName,
             actors: [actorEntityId],
-          },        },
+          },
+        },
       ])
       mockEcs.entityHasComponent.mockImplementation(
         (entity, comp) => entity === actorEntityId && comp === 'TestComponent',
@@ -390,7 +394,8 @@ describe('Intent Pipeline', () => {
           intent: {
             name: intentName,
             actors: [actorEntityId],
-          },        },
+          },
+        },
       ])
       mockEcs.isComponent.mockImplementation((comp) => comp === 'TestComponent')
       mockEcs.getEntityComponentData.mockImplementation((entity, comp) =>
@@ -419,7 +424,8 @@ describe('Intent Pipeline', () => {
           intent: {
             name: intentName,
             actors: [actorEntityId],
-          },        },
+          },
+        },
       ])
       mockEcs.entityHasTag.mockImplementation(
         (entity, tag) => entity === actorEntityId && tag === 'special',
@@ -453,7 +459,8 @@ describe('Intent Pipeline', () => {
           intent: {
             name: intentName,
             actors: [actorEntityId],
-          },        },
+          },
+        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       await ip.handleCommand('dry run test')
@@ -496,7 +503,8 @@ describe('Intent Pipeline', () => {
           intent: {
             name: intentName,
             actors: [actorEntityId],
-          },        },
+          },
+        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       mockI18n.$t.mockImplementation((s: string) => s)
@@ -551,7 +559,8 @@ describe('Intent Pipeline', () => {
           intent: {
             name: intentName,
             actors: [actorEntityId],
-          },        },
+          },
+        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       mockI18n.$t.mockImplementation((s: string) => s)
@@ -615,7 +624,8 @@ describe('Intent Pipeline', () => {
           intent: {
             name: intentName,
             actors: [actorEntityId],
-          },        },
+          },
+        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       await ip.handleCommand('multi match test')
@@ -654,7 +664,8 @@ describe('Intent Pipeline', () => {
           intent: {
             name: intentName,
             actors: [actorEntityId],
-          },        },
+          },
+        },
       ])
       mockEcs.entityExists.mockImplementation(() => true)
       await ip.handleCommand('conflict test')
@@ -922,7 +933,9 @@ describe('Intent Pipeline', () => {
       const intentName = 'MULTI_ENTITY_INTENT'
       const actors = [10, 11]
       const targets = [20, 21]
-      const lawApply = mock().mockImplementationOnce(() => ({ status: ContributionStatus.completed }))
+      const lawApply = mock().mockImplementationOnce(() => ({
+        status: ContributionStatus.completed,
+      }))
 
       ip.ratifyLaw({
         layer: LawLayer.Core,
@@ -996,8 +1009,12 @@ describe('Intent Pipeline', () => {
       const a_specific = 10
       const a_generic = 11
 
-      const lawSpecificApply = mock().mockImplementation(() => ({ status: ContributionStatus.completed }))
-      const lawGenericApply = mock().mockImplementation(() => ({ status: ContributionStatus.completed }))
+      const lawSpecificApply = mock().mockImplementation(() => ({
+        status: ContributionStatus.completed,
+      }))
+      const lawGenericApply = mock().mockImplementation(() => ({
+        status: ContributionStatus.completed,
+      }))
 
       // Law Generic: cares only about Tag1 (Specificity 2.5)
       ip.ratifyLaw({
@@ -1061,8 +1078,12 @@ describe('Intent Pipeline', () => {
       const t_specific = 20
       const t_generic = 21
 
-      const lawSpecificApply = mock().mockImplementation(() => ({ status: ContributionStatus.completed }))
-      const lawGenericApply = mock().mockImplementation(() => ({ status: ContributionStatus.completed }))
+      const lawSpecificApply = mock().mockImplementation(() => ({
+        status: ContributionStatus.completed,
+      }))
+      const lawGenericApply = mock().mockImplementation(() => ({
+        status: ContributionStatus.completed,
+      }))
 
       ip.ratifyLaw({
         layer: LawLayer.Core,
