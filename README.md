@@ -112,7 +112,7 @@ Allegory.js uses AI to empower the player, not to replace the author.
 
 - Human-Crafted Stories: The engine is designed for hand-written narratives and rigorous logic. The AI determines what the player wants to do, but the game logic determines what happens next.
 
-- Deterministic Simulation: Unlike LLM-generated games, AllegoryJS simulations are stable, debuggable, and handcrafted by the developer.
+- Deterministic Simulation: Unlike LLM-generated games, Allegory.js simulations are stable, debuggable, and handcrafted by the developer.
 
 - Local Models First: The ML pipeline is run entirely inside of the player's browser; this allows for fully offline play, and is significantly faster and less wasteful than having the client rely on talking to a big LLM over the wire.
 
