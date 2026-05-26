@@ -60,12 +60,12 @@ gantt
     section Phase 1: The Kernel
     Ideation & Architecture           :done,    p1_1, 2026-01-01, 14d
     Core ECS Implementation           :done,    p1_2, after p1_1, 60d
-    Intent Pipeline (Bidding/Sorting) :active,  p1_3, 2026-03-01, 90d
-    Mutation Executor & Rollbacks     :active,  p1_4, 2026-03-12, 35d
+    Intent Pipeline (Bidding/Sorting) :active,  p1_3, 2026-03-01, 120d
+    Mutation Executor & Rollbacks     :done,    p1_4, 2026-03-12, 35d
     Event Bus & Pub/Sub               :         p1_5, after p1_4, 12d
 
     section Phase 2: NLP & Input
-    Language Profile & Splitter       :         p2_1, after p1_5, 30d
+    Language Profile & Splitter       :         p2_1, after p1_5, 60d
     Integrate Transformers.js (WASM)  :         p2_2, after p2_1, 14d
     Vector Similarity Search          :         p2_3, after p2_2, 21d
     Salience System (Context Cache)   :         p2_4, after p2_3, 7d
