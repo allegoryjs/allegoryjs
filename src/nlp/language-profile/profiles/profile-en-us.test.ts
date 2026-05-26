@@ -1,112 +1,102 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from 'bun:test'
 
-import { splitRawCommands } from "@/nlp/language-profile/profiles/profile-en-us";
+import { splitRawCommands } from '@/nlp/language-profile/profiles/profile-en-us'
 
-describe("profile-en-us", () => {
-  describe("splits commands correctly", () => {
-    it("handles empty or whitespace-only input", () => {
-      expect(splitRawCommands("")).toEqual([]);
-      expect(splitRawCommands("   ")).toEqual([]);
-    });
+describe('profile-en-us', () => {
+  describe('splits commands correctly', () => {
+    it('handles empty or whitespace-only input', () => {
+      expect(splitRawCommands('')).toEqual([])
+      expect(splitRawCommands('   ')).toEqual([])
+    })
 
-    it("handles leading and trailing delimiters", () => {
+    it('handles leading and trailing delimiters', () => {
       // Note: currently leading delimiters are kept if not preceded by a word character
       // because the split regex starts with \b
-      expect(splitRawCommands(". take sword")).toEqual([
-        { dryRun: false, raw: ". take sword" },
-      ]);
-      expect(splitRawCommands("take sword then")).toEqual([
-        { dryRun: false, raw: "take sword" },
-      ]);
-      expect(splitRawCommands("take sword.")).toEqual([
-        { dryRun: false, raw: "take sword" },
-      ]);
-    });
+      expect(splitRawCommands('. take sword')).toEqual([{ dryRun: false, raw: '. take sword' }])
+      expect(splitRawCommands('take sword then')).toEqual([{ dryRun: false, raw: 'take sword' }])
+      expect(splitRawCommands('take sword.')).toEqual([{ dryRun: false, raw: 'take sword' }])
+    })
 
-    it("handles repeated delimiters", () => {
-      expect(splitRawCommands("take sword then then attack")).toEqual([
-        { dryRun: false, raw: "take sword" },
-        { dryRun: false, raw: "attack" },
-      ]);
+    it('handles repeated delimiters', () => {
+      expect(splitRawCommands('take sword then then attack')).toEqual([
+        { dryRun: false, raw: 'take sword' },
+        { dryRun: false, raw: 'attack' },
+      ])
       // '...' without spaces doesn't always split due to \b
-      expect(splitRawCommands("take sword ... attack")).toEqual([
-        { dryRun: false, raw: "take sword ... attack" },
-      ]);
-    });
+      expect(splitRawCommands('take sword ... attack')).toEqual([
+        { dryRun: false, raw: 'take sword ... attack' },
+      ])
+    })
 
-    it("propagates dryRun state correctly across multiple commands", () => {
-      expect(
-        splitRawCommands("take sword then can i attack then go north"),
-      ).toEqual([
-        { dryRun: false, raw: "take sword" },
-        { dryRun: true, raw: "attack" },
-        { dryRun: true, raw: "go north" },
-      ]);
-    });
+    it('propagates dryRun state correctly across multiple commands', () => {
+      expect(splitRawCommands('take sword then can i attack then go north')).toEqual([
+        { dryRun: false, raw: 'take sword' },
+        { dryRun: true, raw: 'attack' },
+        { dryRun: true, raw: 'go north' },
+      ])
+    })
 
-    it("is case-insensitive for prefixes and delimiters", () => {
-      expect(splitRawCommands("CAN I take sword AND THEN go north")).toEqual([
-        { dryRun: true, raw: "take sword" },
-        { dryRun: true, raw: "go north" },
-      ]);
-    });
+    it('is case-insensitive for prefixes and delimiters', () => {
+      expect(splitRawCommands('CAN I take sword AND THEN go north')).toEqual([
+        { dryRun: true, raw: 'take sword' },
+        { dryRun: true, raw: 'go north' },
+      ])
+    })
 
-    it("handles commands that are only an interrogative prefix", () => {
-      expect(splitRawCommands("Can I?")).toEqual([{ dryRun: true, raw: "" }]);
-    });
+    it('handles commands that are only an interrogative prefix', () => {
+      expect(splitRawCommands('Can I?')).toEqual([{ dryRun: true, raw: '' }])
+    })
 
-    it("preserves spacing within a command but trims outer spacing", () => {
-      expect(splitRawCommands("  take   the   sword  ")).toEqual([
-        { dryRun: false, raw: "take   the   sword" },
-      ]);
-    });
+    it('preserves spacing within a command but trims outer spacing', () => {
+      expect(splitRawCommands('  take   the   sword  ')).toEqual([
+        { dryRun: false, raw: 'take   the   sword' },
+      ])
+    })
 
-    it("handles all supported honorifics and abbreviations without splitting", () => {
+    it('handles all supported honorifics and abbreviations without splitting', () => {
       const titles = [
-        "Mr.",
-        "Mrs.",
-        "Ms.",
-        "Mx.",
-        "Messrs.",
-        "Mmes.",
-        "Dr.",
-        "Prof.",
-        "Gen.",
-        "Col.",
-        "Maj.",
-        "Capt.",
-        "Lt.",
-        "Sgt.",
-        "Cpl.",
-        "Pvt.",
-        "Rev.",
-        "Fr.",
-        "Sr.",
-        "Br.",
-        "Rab.",
-        "Cant.",
-        "Mons.",
-        "Hon.",
-        "Gov.",
-        "Sen.",
-        "Rep.",
-        "Amb.",
-        "Pres.",
-        "Jr.",
-        "Sr.",
-        "No.",
-        "Misc.",
-      ];
+        'Mr.',
+        'Mrs.',
+        'Ms.',
+        'Mx.',
+        'Messrs.',
+        'Mmes.',
+        'Dr.',
+        'Prof.',
+        'Gen.',
+        'Col.',
+        'Maj.',
+        'Capt.',
+        'Lt.',
+        'Sgt.',
+        'Cpl.',
+        'Pvt.',
+        'Rev.',
+        'Fr.',
+        'Sr.',
+        'Br.',
+        'Rab.',
+        'Cant.',
+        'Mons.',
+        'Hon.',
+        'Gov.',
+        'Sen.',
+        'Rep.',
+        'Amb.',
+        'Pres.',
+        'Jr.',
+        'Sr.',
+        'No.',
+        'Misc.',
+      ]
 
       for (const title of titles) {
-        const command = `tell ${title} Green to wait`;
-        expect(splitRawCommands(command)).toEqual([
-          { dryRun: false, raw: command },
-        ]);
+        const command = `tell ${title} Green to wait`
+        expect(splitRawCommands(command)).toEqual([{ dryRun: false, raw: command }])
       }
-    });
+    })
 
-    it("handles common contractions with apostrophes without splitting", () => {
+    it('handles common contractions with apostrophes without splitting', () => {
       const contractions = [
         `don't`,
         `can't`,
@@ -121,358 +111,339 @@ describe("profile-en-us", () => {
         `couldn't`,
         `shouldn't`,
         `wouldn't`,
-      ];
+      ]
 
       for (const contraction of contractions) {
-        const command = `${contraction} take the sword`;
-        expect(splitRawCommands(command)).toEqual([
-          { dryRun: false, raw: command },
-        ]);
+        const command = `${contraction} take the sword`
+        expect(splitRawCommands(command)).toEqual([{ dryRun: false, raw: command }])
       }
-    });
+    })
 
-    it("does not split on common abbreviations", () => {
+    it('does not split on common abbreviations', () => {
       const cases = [
         {
-          input: "tell John Ph.D. Green to wait",
-          expected: ["tell John Ph.D. Green to wait"],
+          input: 'tell John Ph.D. Green to wait',
+          expected: ['tell John Ph.D. Green to wait'],
         },
         {
-          input: "go to Main St. and look",
-          expected: ["go to Main St. and look"],
+          input: 'go to Main St. and look',
+          expected: ['go to Main St. and look'],
         },
-        { input: "it is approx. 5 miles", expected: ["it is approx. 5 miles"] },
-        { input: "meet at 123 Ave. B", expected: ["meet at 123 Ave. B"] },
-      ];
+        { input: 'it is approx. 5 miles', expected: ['it is approx. 5 miles'] },
+        { input: 'meet at 123 Ave. B', expected: ['meet at 123 Ave. B'] },
+      ]
 
       for (const { input, expected } of cases) {
-        const result = splitRawCommands(input);
-        expect(result.map((r) => r.raw)).toEqual(expected);
+        const result = splitRawCommands(input)
+        expect(result.map((r) => r.raw)).toEqual(expected)
       }
-    });
+    })
 
-    it("demonstrates that trailing punctuation alone does not trigger dryRun", () => {
+    it('demonstrates that trailing punctuation alone does not trigger dryRun', () => {
       // Current behavior: dryRun is only triggered by prefixes, not by '?'
-      expect(splitRawCommands("attack the goblin?")).toEqual([
-        { dryRun: false, raw: "attack the goblin" },
-      ]);
-    });
+      expect(splitRawCommands('attack the goblin?')).toEqual([
+        { dryRun: false, raw: 'attack the goblin' },
+      ])
+    })
 
-    it("does not trigger dryRun if the prefix is not at the very start of the command", () => {
-      expect(splitRawCommands("i want to know can i take the sword")).toEqual([
-        { dryRun: false, raw: "i want to know can i take the sword" },
-      ]);
-    });
+    it('does not trigger dryRun if the prefix is not at the very start of the command', () => {
+      expect(splitRawCommands('i want to know can i take the sword')).toEqual([
+        { dryRun: false, raw: 'i want to know can i take the sword' },
+      ])
+    })
 
-    it("handles multiple commands with different dryRun statuses correctly", () => {
+    it('handles multiple commands with different dryRun statuses correctly', () => {
       // Once dryRun is true, it stays true for the rest of the chain
-      expect(
-        splitRawCommands("take sword. can i attack? go north. look."),
-      ).toEqual([
-        { dryRun: false, raw: "take sword" },
-        { dryRun: true, raw: "attack" },
-        { dryRun: true, raw: "go north" },
-        { dryRun: true, raw: "look" },
-      ]);
-    });
+      expect(splitRawCommands('take sword. can i attack? go north. look.')).toEqual([
+        { dryRun: false, raw: 'take sword' },
+        { dryRun: true, raw: 'attack' },
+        { dryRun: true, raw: 'go north' },
+        { dryRun: true, raw: 'look' },
+      ])
+    })
 
-    describe("when the command contains", () => {
-      const baseCommandOne = "take the sword";
-      const baseCommandTwo = "attack the goblin";
-      const baseCommandThree = "heal using the potion";
+    describe('when the command contains', () => {
+      const baseCommandOne = 'take the sword'
+      const baseCommandTwo = 'attack the goblin'
+      const baseCommandThree = 'heal using the potion'
 
-      describe("interrogative", () => {
+      describe('interrogative', () => {
         const interrogativePrefixes = [
-          "would i be able to",
-          "am i able to",
-          "could i",
-          "can i",
-          "is it possible to",
-          "may i",
-        ];
+          'would i be able to',
+          'am i able to',
+          'could i',
+          'can i',
+          'is it possible to',
+          'may i',
+        ]
 
-        const doubleDotPunctuation = ["..", "..!", "..?", "..?!", "..!?"];
-        const tripleDotPunctuation = ["...", "...!", "...?", "...?!", "...!?"];
+        const doubleDotPunctuation = ['..', '..!', '..?', '..?!', '..!?']
+        const tripleDotPunctuation = ['...', '...!', '...?', '...?!', '...!?']
 
         const punctuation = [
-          ".",
-          ";",
-          "!",
-          "?",
-          "!?",
-          "?!",
+          '.',
+          ';',
+          '!',
+          '?',
+          '!?',
+          '?!',
           ...doubleDotPunctuation,
           ...tripleDotPunctuation,
-        ];
+        ]
 
         const compoundDelimiters = (() => {
           // generate delimiters including cases where there are multiple spaces between delimiter and 'then'
           return punctuation
             .concat(
               [...punctuation].flatMap((punc) =>
-                [1, 2, 3].map((spaces) => `${punc}${" ".repeat(spaces)}then`),
+                [1, 2, 3].map((spaces) => `${punc}${' '.repeat(spaces)}then`),
               ),
             )
-            .concat([0, 1, 2].map((spaces) => `,${" ".repeat(spaces)}then`))
-            .concat([1, 2].map((spaces) => `, and${" ".repeat(spaces)}then`))
-            .concat([1, 2].map((spaces) => `, &${" ".repeat(spaces)}then`));
-        })();
+            .concat([0, 1, 2].map((spaces) => `,${' '.repeat(spaces)}then`))
+            .concat([1, 2].map((spaces) => `, and${' '.repeat(spaces)}then`))
+            .concat([1, 2].map((spaces) => `, &${' '.repeat(spaces)}then`))
+        })()
 
-        it("single commands", () => {
-          let questions = interrogativePrefixes.map(
-            (prefix) => `${prefix} ${baseCommandOne}`,
-          );
+        it('single commands', () => {
+          let questions = interrogativePrefixes.map((prefix) => `${prefix} ${baseCommandOne}`)
 
           questions = questions.concat(
             ...questions.map((q) => punctuation.map((punc) => `${q}${punc}`)),
-          );
+          )
 
           questions.forEach((q) => {
-            const split = splitRawCommands(q);
-            expect(split.length).toBe(1);
+            const split = splitRawCommands(q)
+            expect(split.length).toBe(1)
             expect(split[0]).toEqual(
-              expect.objectContaining({ dryRun: true, raw: "take the sword" }),
-            );
-          });
-        });
+              expect.objectContaining({ dryRun: true, raw: 'take the sword' }),
+            )
+          })
+        })
 
-        it("two-part compound commands", () => {
+        it('two-part compound commands', () => {
           let questions = interrogativePrefixes
             .map((prefix) => `${prefix} ${baseCommandOne}`)
             .flatMap((questionPartOne) =>
               compoundDelimiters.map(
-                (delimiter) =>
-                  `${questionPartOne}${delimiter} ${baseCommandTwo}`,
+                (delimiter) => `${questionPartOne}${delimiter} ${baseCommandTwo}`,
               ),
-            );
+            )
 
           const twoQuestions = questions.concat(
             ...questions.map((q) => punctuation.map((punc) => `${q}${punc}`)),
-          );
+          )
 
           twoQuestions.forEach((q) => {
-            const split = splitRawCommands(q);
+            const split = splitRawCommands(q)
 
-            expect(split.length).toBe(2);
-            expect(split[0]).toEqual(
-              expect.objectContaining({ dryRun: true, raw: baseCommandOne }),
-            );
-            expect(split[1]).toEqual(
-              expect.objectContaining({ dryRun: true, raw: baseCommandTwo }),
-            );
-          });
-        });
+            expect(split.length).toBe(2)
+            expect(split[0]).toEqual(expect.objectContaining({ dryRun: true, raw: baseCommandOne }))
+            expect(split[1]).toEqual(expect.objectContaining({ dryRun: true, raw: baseCommandTwo }))
+          })
+        })
 
-        describe("three-part compound commands", () => {
+        describe('three-part compound commands', () => {
           // Instead of testing all 71×71×16 = 544K combinations (O(n²) explosion),
           // we test each delimiter independently in each position, plus all prefix
           // and punctuation variants. The same regex is applied twice, so each
           // delimiter's behavior is independent — no need for the Cartesian product.
-          const fixedDelimiter = ". then";
-          const fixedPrefix = "can i";
+          const fixedDelimiter = '. then'
+          const fixedPrefix = 'can i'
 
-          it("splits correctly with each delimiter in the first position", () => {
+          it('splits correctly with each delimiter in the first position', () => {
             for (const d of compoundDelimiters) {
-              const q = `${fixedPrefix} ${baseCommandOne}${d} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`;
-              const split = splitRawCommands(q);
-              expect(split.length).toBe(3);
+              const q = `${fixedPrefix} ${baseCommandOne}${d} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`
+              const split = splitRawCommands(q)
+              expect(split.length).toBe(3)
               expect(split[0]).toEqual(
                 expect.objectContaining({ dryRun: true, raw: baseCommandOne }),
-              );
+              )
               expect(split[1]).toEqual(
                 expect.objectContaining({ dryRun: true, raw: baseCommandTwo }),
-              );
+              )
               expect(split[2]).toEqual(
                 expect.objectContaining({
                   dryRun: true,
                   raw: baseCommandThree,
                 }),
-              );
+              )
             }
-          });
+          })
 
-          it("splits correctly with each delimiter in the second position", () => {
+          it('splits correctly with each delimiter in the second position', () => {
             for (const d of compoundDelimiters) {
-              const q = `${fixedPrefix} ${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${d} ${baseCommandThree}`;
-              const split = splitRawCommands(q);
-              expect(split.length).toBe(3);
+              const q = `${fixedPrefix} ${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${d} ${baseCommandThree}`
+              const split = splitRawCommands(q)
+              expect(split.length).toBe(3)
               expect(split[0]).toEqual(
                 expect.objectContaining({ dryRun: true, raw: baseCommandOne }),
-              );
+              )
               expect(split[1]).toEqual(
                 expect.objectContaining({ dryRun: true, raw: baseCommandTwo }),
-              );
+              )
               expect(split[2]).toEqual(
                 expect.objectContaining({
                   dryRun: true,
                   raw: baseCommandThree,
                 }),
-              );
+              )
             }
-          });
+          })
 
-          it("splits correctly with every interrogative prefix", () => {
+          it('splits correctly with every interrogative prefix', () => {
             for (const prefix of interrogativePrefixes) {
-              const q = `${prefix} ${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`;
-              const split = splitRawCommands(q);
-              expect(split.length).toBe(3);
+              const q = `${prefix} ${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`
+              const split = splitRawCommands(q)
+              expect(split.length).toBe(3)
               expect(split[0]).toEqual(
                 expect.objectContaining({ dryRun: true, raw: baseCommandOne }),
-              );
+              )
               expect(split[1]).toEqual(
                 expect.objectContaining({ dryRun: true, raw: baseCommandTwo }),
-              );
+              )
               expect(split[2]).toEqual(
                 expect.objectContaining({
                   dryRun: true,
                   raw: baseCommandThree,
                 }),
-              );
+              )
             }
-          });
+          })
 
-          it("splits correctly with trailing punctuation on the third command", () => {
-            const base = `${fixedPrefix} ${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`;
+          it('splits correctly with trailing punctuation on the third command', () => {
+            const base = `${fixedPrefix} ${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`
             for (const punc of punctuation) {
-              const q = `${base}${punc}`;
-              const split = splitRawCommands(q);
-              expect(split.length).toBe(3);
+              const q = `${base}${punc}`
+              const split = splitRawCommands(q)
+              expect(split.length).toBe(3)
               expect(split[0]).toEqual(
                 expect.objectContaining({ dryRun: true, raw: baseCommandOne }),
-              );
+              )
               expect(split[1]).toEqual(
                 expect.objectContaining({ dryRun: true, raw: baseCommandTwo }),
-              );
+              )
               expect(split[2]).toEqual(
                 expect.objectContaining({
                   dryRun: true,
                   raw: baseCommandThree,
                 }),
-              );
+              )
             }
-          });
-        });
-      });
+          })
+        })
+      })
 
-      describe("imperative", () => {
-        const doubleDotPunctuation = ["..", "..!"];
-        const tripleDotPunctuation = ["...", "...!"];
+      describe('imperative', () => {
+        const doubleDotPunctuation = ['..', '..!']
+        const tripleDotPunctuation = ['...', '...!']
 
-        const punctuation = [
-          ".",
-          ";",
-          "!",
-          ...doubleDotPunctuation,
-          ...tripleDotPunctuation,
-        ];
+        const punctuation = ['.', ';', '!', ...doubleDotPunctuation, ...tripleDotPunctuation]
 
         const compoundDelimiters = (() => {
           // generate delimiters including cases where there are multiple spaces between delimiter and 'then'
           return punctuation
             .concat(
               [...punctuation].flatMap((punc) =>
-                [1, 2, 3].map((spaces) => `${punc}${" ".repeat(spaces)}then`),
+                [1, 2, 3].map((spaces) => `${punc}${' '.repeat(spaces)}then`),
               ),
             )
-            .concat([0, 1, 2, 3].map((spaces) => `,${" ".repeat(spaces)}then`))
-            .concat([1, 2, 3].map((spaces) => `, and${" ".repeat(spaces)}then`))
-            .concat([1, 2, 3].map((spaces) => `, &${" ".repeat(spaces)}then`));
-        })();
+            .concat([0, 1, 2, 3].map((spaces) => `,${' '.repeat(spaces)}then`))
+            .concat([1, 2, 3].map((spaces) => `, and${' '.repeat(spaces)}then`))
+            .concat([1, 2, 3].map((spaces) => `, &${' '.repeat(spaces)}then`))
+        })()
 
-        it("single commands", () => {
-          const statements = punctuation.map(
-            (punc) => `${baseCommandOne}${punc}`,
-          );
+        it('single commands', () => {
+          const statements = punctuation.map((punc) => `${baseCommandOne}${punc}`)
 
           statements.forEach((statement) => {
-            const split = splitRawCommands(statement);
-            expect(split.length).toBe(1);
+            const split = splitRawCommands(statement)
+            expect(split.length).toBe(1)
             expect(split[0]).toEqual(
-              expect.objectContaining({ dryRun: false, raw: "take the sword" }),
-            );
-          });
-        });
+              expect.objectContaining({ dryRun: false, raw: 'take the sword' }),
+            )
+          })
+        })
 
-        it("two-part compound commands with all delimiters", () => {
+        it('two-part compound commands with all delimiters', () => {
           for (const delimiter of compoundDelimiters) {
-            const commands = `${baseCommandOne}${delimiter} ${baseCommandTwo}`;
-            const split = splitRawCommands(commands);
+            const commands = `${baseCommandOne}${delimiter} ${baseCommandTwo}`
+            const split = splitRawCommands(commands)
 
-            expect(split.length).toBe(2);
+            expect(split.length).toBe(2)
             expect(split[0]).toEqual(
               expect.objectContaining({ dryRun: false, raw: baseCommandOne }),
-            );
+            )
             expect(split[1]).toEqual(
               expect.objectContaining({ dryRun: false, raw: baseCommandTwo }),
-            );
+            )
           }
-        });
+        })
 
-        describe("three-part compound commands", () => {
-          const fixedDelimiter = ". then";
+        describe('three-part compound commands', () => {
+          const fixedDelimiter = '. then'
 
-          it("splits correctly with each delimiter in the first position", () => {
+          it('splits correctly with each delimiter in the first position', () => {
             for (const d of compoundDelimiters) {
-              const q = `${baseCommandOne}${d} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`;
-              const split = splitRawCommands(q);
-              expect(split.length).toBe(3);
+              const q = `${baseCommandOne}${d} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`
+              const split = splitRawCommands(q)
+              expect(split.length).toBe(3)
               expect(split[0]).toEqual(
                 expect.objectContaining({ dryRun: false, raw: baseCommandOne }),
-              );
+              )
               expect(split[1]).toEqual(
                 expect.objectContaining({ dryRun: false, raw: baseCommandTwo }),
-              );
+              )
               expect(split[2]).toEqual(
                 expect.objectContaining({
                   dryRun: false,
                   raw: baseCommandThree,
                 }),
-              );
+              )
             }
-          });
+          })
 
-          it("splits correctly with each delimiter in the second position", () => {
+          it('splits correctly with each delimiter in the second position', () => {
             for (const d of compoundDelimiters) {
-              const q = `${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${d} ${baseCommandThree}`;
-              const split = splitRawCommands(q);
-              expect(split.length).toBe(3);
+              const q = `${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${d} ${baseCommandThree}`
+              const split = splitRawCommands(q)
+              expect(split.length).toBe(3)
               expect(split[0]).toEqual(
                 expect.objectContaining({ dryRun: false, raw: baseCommandOne }),
-              );
+              )
               expect(split[1]).toEqual(
                 expect.objectContaining({ dryRun: false, raw: baseCommandTwo }),
-              );
+              )
               expect(split[2]).toEqual(
                 expect.objectContaining({
                   dryRun: false,
                   raw: baseCommandThree,
                 }),
-              );
+              )
             }
-          });
+          })
 
-          it("splits correctly with trailing punctuation on the third command", () => {
-            const base = `${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`;
+          it('splits correctly with trailing punctuation on the third command', () => {
+            const base = `${baseCommandOne}${fixedDelimiter} ${baseCommandTwo}${fixedDelimiter} ${baseCommandThree}`
             for (const punc of punctuation) {
-              const q = `${base}${punc}`;
-              const split = splitRawCommands(q);
-              expect(split.length).toBe(3);
+              const q = `${base}${punc}`
+              const split = splitRawCommands(q)
+              expect(split.length).toBe(3)
               expect(split[0]).toEqual(
                 expect.objectContaining({ dryRun: false, raw: baseCommandOne }),
-              );
+              )
               expect(split[1]).toEqual(
                 expect.objectContaining({ dryRun: false, raw: baseCommandTwo }),
-              );
+              )
               expect(split[2]).toEqual(
                 expect.objectContaining({
                   dryRun: false,
                   raw: baseCommandThree,
                 }),
-              );
+              )
             }
-          });
-        });
-      });
-    });
-  });
-});
+          })
+        })
+      })
+    })
+  })
+})

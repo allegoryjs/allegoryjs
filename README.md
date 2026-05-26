@@ -1,10 +1,13 @@
 # Allegory.js
 
+[![Open in Dev Containers](https://img.shields.io/static/v1?label=Dev%20Containers&message=Open&color=blue)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/allegoryjs/allegoryjs)
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./images/allegory_logo_horizontal_light.png">
   <source media="(prefers-color-scheme: light)" srcset="./images/allegory_logo_horizontal.png">
   <img alt="AllegoryJS logo" src="./images/allegory_logo_horizontal.png">
 </picture>
+
 
 > **Status: Pre-Alpha / Heavy Development**
 > _This repository is currently a construction zone. Architecture is being defined, and the kernel is being built._

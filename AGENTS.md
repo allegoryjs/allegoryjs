@@ -14,6 +14,7 @@ This project uses **oxfmt** for formatting and **oxlint** for linting. All gener
 
 - **`import type`** — always use `import type { Foo }` for type-only imports. Do not mix types and values in the same import statement (`consistent-type-imports`).
 - **No relative parent imports** — use the `@/` path alias instead of `../` to reach into `src/`.
+
   ```ts
   // ❌
   import { Foo } from '../../utilities/foo'
@@ -21,6 +22,7 @@ This project uses **oxfmt** for formatting and **oxlint** for linting. All gener
   // ✅
   import { Foo } from '@/utilities/foo'
   ```
+
 - **`await` in loops is allowed** — the `no-await-in-loop` rule is off.
 - **Correctness & perf rules** are errors — do not introduce lint errors.
 - **Suspicious rules** are warnings — address them when possible.
@@ -35,8 +37,8 @@ This project uses **oxfmt** for formatting and **oxlint** for linting. All gener
 
 ## Project Commands
 
-- `bun run lint` — check formatting and linting
-- `bun run lint:fix` — auto-fix both formatting and linting
-- `bun run lint:style` — fix formatting only
+- `bun lint` — check formatting and linting
+- `bun lint:fix` — auto-fix both formatting and linting
+- `bun lint:style` — fix formatting only
 
-Always run `bun run lint` after making changes to verify compliance.
+Always run `bun lint` after making changes to verify compliance.
