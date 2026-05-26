@@ -1,7 +1,15 @@
 # Allegory.js
-![Status: Pre-Alpha](https://img.shields.io/badge/status-pre--alpha-red) [![Open in Dev Containers](https://img.shields.io/static/v1?label=Dev%20Containers&message=Open&color=blue)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/allegoryjs/allegoryjs) ![License: MIT](https://img.shields.io/github/license/allegoryjs/allegoryjs)
-
-![Language: TypeScript](https://img.shields.io/badge/language-TypeScript-blue?logo=typescript&logoColor=white) ![Made with: Bun](https://img.shields.io/badge/Built%20with-Bun-fbf0df?logo=bun&logoColor=black) ![GitHub stars](https://img.shields.io/github/stars/allegoryjs/allegoryjs?style=social)
+<p align="left">
+  <img src="https://img.shields.io/badge/status-pre--alpha-red" alt="Status: Pre-Alpha" />
+  <img src="https://img.shields.io/badge/language-TypeScript-blue?logo=typescript&logoColor=white" alt="Language: TypeScript" />
+  <img src="https://img.shields.io/badge/Built%20with-Bun-fbf0df?logo=bun&logoColor=black" alt="Built with Bun" />
+  <a href="https://github.com/allegoryjs/allegoryjs/blob/master/LICENSE">
+    <img src="https://img.shields.io/github/license/allegoryjs/allegoryjs" alt="License: MIT" />
+  </a>
+  <a href="https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/allegoryjs/allegoryjs">
+    <img src="https://img.shields.io/static/v1?label=Dev%20Containers&message=Open&color=blue&logo=visualstudiocode" alt="Open in Dev Containers" />
+  </a>
+</p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./images/allegory_logo_horizontal_light.png">
