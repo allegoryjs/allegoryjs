@@ -7,7 +7,7 @@ import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
 import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
-import IntentPipeline from '@/kernel/intent-pipeline/intent-pipeline'
+import IntentPipeline, { LawContext } from '@/kernel/intent-pipeline/intent-pipeline'
 import {
   ContributionStatus,
   LawLayer,
@@ -358,7 +358,7 @@ describe('Intent Pipeline', () => {
         },
       ])
       mockEcs.entityHasComponent.mockImplementation(
-        (entity, comp) => entity === actorEntityId && comp === 'TestComponent',
+        (entity: number, comp: string) => entity === actorEntityId && comp === 'TestComponent',
       )
       mockEcs.entityExists.mockImplementation(() => true)
       await ip.handleCommand('component match test')
@@ -397,8 +397,8 @@ describe('Intent Pipeline', () => {
           },
         },
       ])
-      mockEcs.isComponent.mockImplementation((comp) => comp === 'TestComponent')
-      mockEcs.getEntityComponentData.mockImplementation((entity, comp) =>
+      mockEcs.isComponent.mockImplementation((comp: string) => comp === 'TestComponent')
+      mockEcs.getEntityComponentData.mockImplementation((entity: number, comp: string) =>
         entity === actorEntityId && comp === 'TestComponent' ? { value: 42 } : undefined,
       )
       mockEcs.entityExists.mockImplementation(() => true)
@@ -428,7 +428,7 @@ describe('Intent Pipeline', () => {
         },
       ])
       mockEcs.entityHasTag.mockImplementation(
-        (entity, tag) => entity === actorEntityId && tag === 'special',
+        (entity: number, tag: string) => entity === actorEntityId && tag === 'special',
       )
       mockEcs.entityExists.mockImplementation(() => true)
       await ip.handleCommand('tag match test')
@@ -440,7 +440,7 @@ describe('Intent Pipeline', () => {
     it('passes dryRun flag to law context', async () => {
       const intentName = 'DRY_RUN_INTENT'
       const actorEntityId = 7
-      const lawApply = mock().mockImplementationOnce((ctx) => {
+      const lawApply = mock().mockImplementationOnce((ctx: LawContext<TestSchema>) => {
         expect(ctx.dryRun).toBe(true)
         return { status: ContributionStatus.pass }
       })
@@ -773,7 +773,7 @@ describe('Intent Pipeline', () => {
       const e1 = 101
       const e2 = 102
 
-      const lawApply = mock().mockImplementationOnce((ctx) => {
+      const lawApply = mock().mockImplementationOnce((ctx: LawContext<TestSchema>) => {
         // Should receive auxiliaries in the reordered order: [E2, E1]
         expect(ctx.auxiliary).toEqual([e2, e1])
         expect(ctx.originalAuxiliaries).toEqual([e1, e2])
@@ -805,7 +805,7 @@ describe('Intent Pipeline', () => {
         },
       ])
 
-      mockEcs.entityExists.mockImplementation((id) => [e1, e2].includes(id))
+      mockEcs.entityExists.mockImplementation((id: number) => [e1, e2].includes(id))
 
       await ip.handleCommand('reorder test')
       expect(lawApply).toHaveBeenCalled()
@@ -841,7 +841,7 @@ describe('Intent Pipeline', () => {
         },
       ])
 
-      mockI18n.$t.mockImplementation((s) => `translated:${s}`)
+      mockI18n.$t.mockImplementation((s: string) => `translated:${s}`)
       const emitDynamicSpy = spyOn(mockEventBus, 'emitDynamic')
 
       await ip.handleCommand('contribution test')
@@ -962,7 +962,7 @@ describe('Intent Pipeline', () => {
       ])
 
       mockEcs.entityExists.mockImplementation(() => true)
-      mockEcs.entityHasTag.mockImplementation((entity, tag) => {
+      mockEcs.entityHasTag.mockImplementation((entity: number, tag: string) => {
         if (tag === 'actor-tag') return actors.includes(entity)
         if (tag === 'target-tag') return targets.includes(entity)
         return false
@@ -996,7 +996,7 @@ describe('Intent Pipeline', () => {
       ])
 
       mockEcs.entityExists.mockImplementation(() => true)
-      mockEcs.entityHasTag.mockImplementation((entity, tag) => {
+      mockEcs.entityHasTag.mockImplementation((entity: number, tag: string) => {
         return entity === 10 && tag === 'actor-tag'
       })
 
@@ -1035,7 +1035,7 @@ describe('Intent Pipeline', () => {
       })
 
       mockEcs.entityExists.mockImplementation(() => true)
-      mockEcs.entityHasTag.mockImplementation((entity, tag) => {
+      mockEcs.entityHasTag.mockImplementation((entity: number, tag: string) => {
         if (entity === a_specific) return ['tag1', 'tag2'].includes(tag)
         if (entity === a_generic) return tag === 'tag1'
         return false
@@ -1102,7 +1102,7 @@ describe('Intent Pipeline', () => {
       })
 
       mockEcs.entityExists.mockImplementation(() => true)
-      mockEcs.entityHasTag.mockImplementation((entity, tag) => {
+      mockEcs.entityHasTag.mockImplementation((entity: number, tag: string) => {
         if (entity === t_specific) return ['tag1', 'tag2'].includes(tag)
         if (entity === t_generic) return tag === 'tag1'
         return false
