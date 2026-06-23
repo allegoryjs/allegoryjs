@@ -1,4 +1,5 @@
 # Allegory.js
+
 <p align="left">
   <img src="https://img.shields.io/badge/status-pre--alpha-red" alt="Status: Pre-Alpha" />
   <img src="https://img.shields.io/badge/language-TypeScript-blue?logo=typescript&logoColor=white" alt="Language: TypeScript" />
@@ -16,7 +17,6 @@
   <source media="(prefers-color-scheme: light)" srcset="./images/allegory_logo_horizontal.png">
   <img alt="AllegoryJS logo" src="./images/allegory_logo_horizontal.png">
 </picture>
-
 
 > **Status: Pre-Alpha / Heavy Development**
 > _This repository is currently a construction zone. Architecture is being defined, and the kernel is being built._

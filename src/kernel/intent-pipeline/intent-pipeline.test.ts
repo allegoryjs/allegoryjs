@@ -7,7 +7,8 @@ import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
 import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
-import IntentPipeline, { LawContext } from '@/kernel/intent-pipeline/intent-pipeline'
+import type { LawContext } from '@/kernel/intent-pipeline/intent-pipeline'
+import IntentPipeline from '@/kernel/intent-pipeline/intent-pipeline'
 import {
   ContributionStatus,
   LawLayer,
@@ -1129,6 +1130,126 @@ describe('Intent Pipeline', () => {
       ])
       await ip.handleCommand('target order 2')
       expect(lawSpecificApply).toHaveBeenCalled()
+    })
+
+    it('fails to match if any target does not satisfy the target concern', async () => {
+      const intentName = 'MULTI_TARGET_FAIL_INTENT'
+      const targets = [20, 21] // 21 will fail
+      const lawApply = mock()
+
+      ip.ratifyLaw({
+        layer: LawLayer.Core,
+        name: 'multi-target-fail-law',
+        intents: [intentName],
+        apply: lawApply,
+        matchers: [{ target: { tags: ['target-tag'] } }],
+      })
+
+      mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [
+        {
+          confidence: 1,
+          intent: {
+            name: intentName,
+            targets,
+          },
+        },
+      ])
+
+      mockEcs.entityExists.mockImplementation(() => true)
+      mockEcs.entityHasTag.mockImplementation((entity: number, tag: string) => {
+        return entity === 20 && tag === 'target-tag'
+      })
+
+      await ip.handleCommand('multi target fail')
+      expect(lawApply).not.toHaveBeenCalled()
+    })
+
+    it('fails to match if the law requires an actor but none are provided', async () => {
+      const intentName = 'MISSING_ACTOR_INTENT'
+      const lawApply = mock()
+
+      ip.ratifyLaw({
+        layer: LawLayer.Core,
+        name: 'missing-actor-law',
+        intents: [intentName],
+        apply: lawApply,
+        matchers: [{ actor: { tags: ['actor-tag'] } }],
+      })
+
+      mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [
+        {
+          confidence: 1,
+          intent: {
+            name: intentName,
+            actors: [], // No actors provided
+          },
+        },
+      ])
+
+      await ip.handleCommand('missing actor')
+      expect(lawApply).not.toHaveBeenCalled()
+    })
+
+    it('fails to match if the law requires a target but none are provided', async () => {
+      const intentName = 'MISSING_TARGET_INTENT'
+      const lawApply = mock()
+
+      ip.ratifyLaw({
+        layer: LawLayer.Core,
+        name: 'missing-target-law',
+        intents: [intentName],
+        apply: lawApply,
+        matchers: [{ target: { tags: ['target-tag'] } }],
+      })
+
+      mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [
+        {
+          confidence: 1,
+          intent: {
+            name: intentName,
+            targets: undefined, // No targets provided
+          },
+        },
+      ])
+
+      await ip.handleCommand('missing target')
+      expect(lawApply).not.toHaveBeenCalled()
+    })
+
+    it('provides actors and targets arrays to LawContext and actor/target getters return first elements', async () => {
+      const intentName = 'CONTEXT_GETTERS_INTENT'
+      const actors = [10, 11]
+      const targets = [20, 21]
+
+      const lawApply = mock().mockImplementationOnce((ctx: LawContext<TestSchema>) => {
+        expect(ctx.actors).toEqual(actors)
+        expect(ctx.targets).toEqual(targets)
+        expect(ctx.actor).toBe(10)
+        expect(ctx.target).toBe(20)
+        return { status: ContributionStatus.completed }
+      })
+
+      ip.ratifyLaw({
+        layer: LawLayer.Core,
+        name: 'context-getters-law',
+        intents: [intentName],
+        apply: lawApply,
+        matchers: [{}], // Law matches unconditionally
+      })
+
+      mockIntentClassificationModule.getIntentFromCommand.mockImplementationOnce(() => [
+        {
+          confidence: 1,
+          intent: {
+            name: intentName,
+            actors,
+            targets,
+          },
+        },
+      ])
+
+      await ip.handleCommand('context getters')
+      expect(lawApply).toHaveBeenCalled()
     })
   })
 })
