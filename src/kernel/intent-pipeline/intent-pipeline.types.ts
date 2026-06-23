@@ -178,7 +178,3 @@ export interface Law<ComponentSchema extends EngineComponentSchema> {
     */
   matchers: Array<LawMatcher<ComponentSchema>>
 }
-
-export interface IntentClassificationModule {
-  getIntentFromCommand: (command: string) => Promise<Array<IntentClassificationResponse>>
-}

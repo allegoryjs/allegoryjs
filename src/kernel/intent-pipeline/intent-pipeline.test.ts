@@ -55,7 +55,7 @@ describe('Intent Pipeline', () => {
   } satisfies LocalizationModule
 
   const mockIntentClassificationModule = {
-    getIntentFromCommand: mock(),
+    getIntentsFromCommand: mock(),
   } satisfies IntentClassificationModule
 
   const logger: Logger = new DefaultLogger({

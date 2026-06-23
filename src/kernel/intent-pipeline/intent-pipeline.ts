@@ -14,7 +14,6 @@ import {
 import type {
   Contribution,
   Intent,
-  IntentClassificationModule,
   IntentPipelineConfig,
   Law,
   LawBid,
@@ -22,6 +21,8 @@ import type {
   LawContextOpts,
   MutationOp,
 } from '@/kernel/intent-pipeline/intent-pipeline.types'
+import type { IntentClassificationModule } from '../intent-classifier/intent-classifier.types'
+
 /**
  * The IntentPipeline coordinates the transformation of user commands into actionable engine effects.
  * It manages intent classification, auctions those intents to registered "Laws" to determine the
@@ -583,9 +584,14 @@ export default class IntentPipeline<
     }
   }
 
-  public async handleCommand(playerCommand: string) {
+  /**
+   * The entry point into the engine's handling of player input
+   *
+   * @param playerCommand - the raw, unprocessed command that the player submitts to the game
+   */
+  public async handleCommand(playerCommand: string): Promise<void> {
     const intentResponses =
-      await this.#intentClassificationModule.getIntentFromCommand(playerCommand)
+      await this.#intentClassificationModule.getIntentsFromCommand(playerCommand)
 
     if (!intentResponses.length) {
       await this.#handleUnknownCommand()
