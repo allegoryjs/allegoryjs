@@ -65,7 +65,7 @@ gantt
     Event Bus & Pub/Sub               :         p1_5, after p1_4, 12d
 
     section Phase 2: NLP & Input
-    Language Profile & Splitter       :         p2_1, after p1_5, 60d
+    Language Profile & Splitter       :         p2_1, after p1_5, 90d
     Integrate Transformers.js (WASM)  :         p2_2, after p2_1, 14d
     Vector Similarity Search          :         p2_3, after p2_2, 21d
     Salience System (Context Cache)   :         p2_4, after p2_3, 7d
