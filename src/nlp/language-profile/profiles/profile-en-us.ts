@@ -1,4 +1,5 @@
-import type { SplitCommand } from '@/nlp/language-profile/language-profile.types'
+import type { GrammarExtract, SplitCommand } from '@/nlp/language-profile/language-profile.types'
+import nlp from 'compromise'
 
 /**
  * Takes in the player's raw command exactly as typed, and returns an array of
@@ -36,4 +37,16 @@ export function splitRawCommands(rawCommand: string): SplitCommand[] {
       raw: newCmd,
     }
   })
+}
+
+/**
+ * Given a raw command, extracts the words which represent the target(s), action, and tool(s)
+ * that the player is expressing
+ *
+ * @param command the command to extract target(s), action, and tool(s) from
+ */
+export function extractGrammar(command: string): GrammarExtract {
+  const doc = nlp(command)
+  const verbs = doc.verbs()
+  
 }

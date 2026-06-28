@@ -24,8 +24,10 @@ import type {
 import type { IntentClassificationModule } from '../intent-classifier/intent-classifier.types'
 
 /**
+ * @class IntentPipeline
+ *
  * The IntentPipeline coordinates the transformation of user commands into actionable engine effects.
- * It manages intent classification, auctions those intents to registered "Laws" to determine the
+ * It initiates intent classification, auctions classified intents to registered "Laws" to determine the
  * best course of action, and executes the resulting state mutations, narrations, and events.
  *
  * Emits 'engine.unknown_command' on the 'narrate' event stream when a user's command is determined to be unknown/not actionable
@@ -587,7 +589,7 @@ export default class IntentPipeline<
   /**
    * The entry point into the engine's handling of player input
    *
-   * @param playerCommand - the raw, unprocessed command that the player submitts to the game
+   * @param playerCommand - the raw, unprocessed command that the player submits to the game
    */
   public async handleCommand(playerCommand: string): Promise<void> {
     const intentResponses =
