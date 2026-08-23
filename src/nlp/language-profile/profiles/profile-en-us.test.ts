@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'bun:test'
 
-import { splitRawCommands } from '@/nlp/language-profile/profiles/profile-en-us'
+import { splitRawCommands, extractGrammar } from '@/nlp/language-profile/profiles/profile-en-us'
 
 describe('profile-en-us', () => {
-  describe('splits commands correctly', () => {
+  describe('splitRawCommands', () => {
     it('handles empty or whitespace-only input', () => {
       expect(splitRawCommands('')).toEqual([])
       expect(splitRawCommands('   ')).toEqual([])
@@ -444,6 +444,13 @@ describe('profile-en-us', () => {
           })
         })
       })
+    })
+  })
+
+  describe('extractGrammar', () => {
+    it('test', () => {
+      extractGrammar('slowly walk to the door')
+      extractGrammar('I want to slowly walk to the door')
     })
   })
 })
