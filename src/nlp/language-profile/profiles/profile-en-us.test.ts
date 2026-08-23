@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { splitRawCommands, extractGrammar } from '@/nlp/language-profile/profiles/profile-en-us'
+import { splitRawCommands } from '@/nlp/language-profile/profiles/profile-en-us'
 
 describe('profile-en-us', () => {
   describe('splitRawCommands', () => {
@@ -444,13 +444,6 @@ describe('profile-en-us', () => {
           })
         })
       })
-    })
-  })
-
-  describe('extractGrammar', () => {
-    it('test', () => {
-      extractGrammar('slowly walk to the door')
-      extractGrammar('I want to slowly walk to the door')
     })
   })
 })
