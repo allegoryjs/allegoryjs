@@ -69,7 +69,7 @@ export class IntentClassifier {
 
             return {
                 dryRun: splitCommand.dryRun,
-                action: this.#classifyAction(splitCommand.raw),
+                action: await this.#classifyAction(splitCommand.raw),
                 targets,
                 auxiliaries
             }
@@ -77,7 +77,13 @@ export class IntentClassifier {
     }
 
     async #classifyAction(command: string): Promise<ClassifiedAction> {
+        const classifier = await this.#actionPipeline(command, { top_k: 1 })
+        const { label, score } = classifier[0]! // the pipeline is configured to always output 1 result (`top_k: 1` above)
 
+        return {
+            action: label,
+            confidence: score
+        }
     }
 
     async #classifyNer(command: string): Promise<ClassifiedNer> {
@@ -107,5 +113,9 @@ export class IntentClassifier {
             targets,
             auxiliaries
         }
+    }
+
+    async #matchEntities() {
+
     }
 }

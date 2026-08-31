@@ -5,7 +5,7 @@ import type LocalizationModule from '@/helpers/localization/localization'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
-import type { EngineComponentSchema, Entity, ReadonlyFacade } from '@/kernel/ecs/ecs.types'
+import type { EngineComponentSchema, Entity, EcsReadonlyFacade } from '@/kernel/ecs/ecs.types'
 import {
   ContributionStatus,
   ERR_INTENT_REJECTED,
@@ -664,7 +664,7 @@ export class LawContext<ComponentSchema extends EngineComponentSchema> {
   readonly dryRun: boolean
   readonly actors?: Array<Entity>
   readonly targets?: Array<Entity>
-  readonly ecsUtils: ReadonlyFacade<ComponentSchema>
+  readonly ecsUtils: EcsReadonlyFacade<ComponentSchema>
 
   // the list of auxiliaries (implements, tools, etc.) that the user
   // issued the command with, sorted in the order that produces

@@ -15,7 +15,9 @@ export interface EngineComponentSchema {
   }
 }
 
-export interface ReadonlyFacade<ComponentSchema> {
+export interface EcsReadonlyFacade<
+  ComponentSchema extends EngineComponentSchema & Record<string, any> = EngineComponentSchema
+> {
   entityExists(entity: Entity): boolean
   entityHasTag(entity: Entity, tag: string): boolean
   entityHasComponent<ComponentName extends keyof ComponentSchema & string>(
@@ -23,9 +25,9 @@ export interface ReadonlyFacade<ComponentSchema> {
     componentName: ComponentName,
   ): boolean
   getEntityByPrettyId(prettyId: string): Entity | undefined
-  getComponentsOnEntity<ComponentName extends keyof ComponentSchema & string>(
+  getComponentsOnEntity(
     entity: Entity,
-  ): ComponentName[]
+  ): (keyof ComponentSchema & string)[]
   getEntitiesByComponents<ComponentName extends keyof ComponentSchema & string>(
     ...componentTypes: ComponentName[]
   ): Entity[]
@@ -35,8 +37,8 @@ export interface ReadonlyFacade<ComponentSchema> {
   ): Readonly<ComponentSchema[ComponentName]>
 }
 
-export interface System<ComponentSchema> {
+export interface System<ComponentSchema extends EngineComponentSchema & Record<string, any> = EngineComponentSchema> {
   readonly name: string
   readonly priority?: number
-  run(ecs: ReadonlyFacade<ComponentSchema>): Promise<void>
+  run(ecs: EcsReadonlyFacade<ComponentSchema>): Promise<void>
 }

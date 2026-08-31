@@ -1,5 +1,5 @@
 import type { EngineEvent } from '@/helpers/event-bus/event-bus.types'
-import type { ReadonlyFacade, EngineComponentSchema, Entity } from '@/kernel/ecs/ecs.types'
+import type { EcsReadonlyFacade, EngineComponentSchema, Entity } from '@/kernel/ecs/ecs.types'
 import type { LawContext } from '@/kernel/intent-pipeline/intent-pipeline'
 
 export const ERR_INTENT_REJECTED = 'intent-rejected'
@@ -79,7 +79,7 @@ export interface LawContextOpts<ComponentSchema extends EngineComponentSchema> {
   dryRun: boolean
   actors?: Array<Entity>
   targets?: Array<Entity>
-  ecsUtils: ReadonlyFacade<ComponentSchema>
+  ecsUtils: EcsReadonlyFacade<ComponentSchema>
   auxiliary?: Array<Entity>
   originalAuxiliaries?: Array<Entity>
 }

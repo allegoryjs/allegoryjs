@@ -13,6 +13,8 @@ interface TestSchema extends EngineComponentSchema {
   nested: { a: { b: number } }
 }
 
+import EventBus from '@/helpers/event-bus/event-bus'
+
 function makeECS() {
   const logger = new DefaultLogger({
     info: false,
@@ -20,7 +22,8 @@ function makeECS() {
     error: false,
     warn: false,
   })
-  return new ECS<TestSchema>(logger)
+  const eventBus = new EventBus()
+  return new ECS<TestSchema>(eventBus, logger)
 }
 
 // ─── createEntity ───────────────────────────────────────────────────
@@ -783,7 +786,7 @@ describe('Systems', () => {
 
   test('systems use default priority when none is provided', () => {
     // Default priority set to 25
-    const ecs = new ECS<TestSchema>(undefined, 25)
+    const ecs = new ECS<TestSchema>(new EventBus(), undefined, 25)
     const s1 = {
       name: 's1',
       priority: 50,

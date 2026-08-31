@@ -1,0 +1,188 @@
+import { defaultEmitStreams } from '@/helpers/event-bus/event-bus'
+import type EventBus from '@/helpers/event-bus/event-bus'
+import { DefaultLogger } from '@/helpers/logger/logger'
+import type { Logger } from '@/helpers/logger/logger.types'
+import type { EngineComponentSchema, Entity, EcsReadonlyFacade } from '@/kernel/ecs/ecs.types'
+import type ECS from '@/kernel/ecs/ecs'
+
+class SemanticResolutionSystem<
+    ComponentSchema extends EngineComponentSchema & Record<string, any> = EngineComponentSchema,
+> {
+    #initialized = false
+    #ecs: EcsReadonlyFacade<ComponentSchema>
+    #eventBus: EventBus
+    #logger: Logger
+    #descriptorCache: Map<Entity, Map<keyof ComponentSchema & string, string>>
+    #resolvers: Map<keyof ComponentSchema & string, (componentData: any) => string>
+
+    constructor(ecs: EcsReadonlyFacade<ComponentSchema>, eventBus: EventBus, logger?: Logger) {
+        this.#ecs = ecs
+        this.#eventBus = eventBus
+        this.#logger = logger ?? new DefaultLogger()
+        this.#descriptorCache = new Map()
+        this.#resolvers = new Map()
+    }
+
+    init() {
+        if (this.#initialized) {
+            this.#logger.warn('Cannot initialize Semantic Resolution System: already initialized')
+            return
+        }
+
+        this.#eventBus.subscribe(
+            defaultEmitStreams.ecsComponentModified,
+            this.#handleComponentModified,
+        )
+
+        this.#eventBus.subscribe(
+            defaultEmitStreams.ecsEntityCreated,
+            this.#handleEntityCreated,
+        )
+
+        this.#eventBus.subscribe(
+            defaultEmitStreams.ecsEntityDestroyed,
+            this.#handleEntityDestroyed,
+        )
+
+        this.#initialized = true
+        this.#logger.info('Semantic Resolution System initialized; all listeners added')
+
+        // eztodo populate cache with existing info from ecs
+    }
+
+    dispose() {
+        if (!this.#initialized) {
+            this.#logger.warn('Disposal of uninitialized Semantic Resolution System triggered; system revoked')
+            return
+        }
+
+        this.#eventBus.unsubscribe(
+            defaultEmitStreams.ecsComponentModified,
+            this.#handleComponentModified,
+        )
+
+        this.#eventBus.unsubscribe(
+            defaultEmitStreams.ecsEntityCreated,
+            this.#handleEntityCreated,
+        )
+
+        this.#eventBus.unsubscribe(
+            defaultEmitStreams.ecsEntityDestroyed,
+            this.#handleEntityDestroyed,
+        )
+
+        this.#logger.info('Semantic Resolution System disposed; all listeners unbound')
+    }
+
+    [Symbol.dispose]() {
+        this.dispose()
+    }
+
+    registerResolver<K extends keyof ComponentSchema & string>(
+        componentName: K,
+        resolver: (componentData: Readonly<ComponentSchema[K]>) => string
+    ) {
+        if (this.#resolvers.has(componentName)) {
+            this.#logger.info(`Replacing existing resolver for component ${componentName}`)
+        } else {
+            this.#logger.info(`Registering new resolver for component ${componentName}`)
+        }
+
+        this.#resolvers.set(componentName, resolver as (componentData: any) => string)
+    }
+
+    deregisterResolver<K extends keyof ComponentSchema & string>(componentName: K) {
+        if (!this.#resolvers.has(componentName)) {
+            this.#logger.warn(`Cannot deregister resolver for component ${componentName}; resolver not registered`)
+            return
+        }
+
+        this.#resolvers.delete(componentName)
+        this.#descriptorCache.forEach((componentMap) => {
+            componentMap.delete(componentName)
+        })
+
+        this.#logger.info(`Removed resolver for component ${componentName}`)
+    }
+
+    #handleComponentModified = (payload: unknown) => {
+        const { entity, component } = payload as { entity: Entity, component: keyof ComponentSchema & string }
+        const componentData = this.#ecs.getEntityComponentData(entity, component)
+        const resolver = this.#resolvers.get(component)
+
+        if (!resolver) {
+            this.#logger.info(`
+                Component modification event received, but no semantic resolver exists for component ${component}.
+                The state of this component will not be interpretable by the ML pipeline.
+                You should add a resolver using registerResolver if entities should be identifiable using data from this component.
+            `.trim())
+
+            return
+        }
+
+        const resolvedDescriptor = resolver(componentData)
+        const cacheEntry = this.#descriptorCache.get(entity)
+
+        if (!cacheEntry) {
+            this.#logger.warn(`
+                Attempted to access nonexistent descriptor cache entry for entity ${entity}.
+                A new cache entry will be created for entity ${entity} -> component ${component}.
+                You should verify that the event bus is being invoked properly when ECS component data is modified.
+            `.trim())
+            this.#descriptorCache.set(entity, new Map([[component, resolvedDescriptor]]))
+        } else {
+            cacheEntry.set(component, resolvedDescriptor)
+        }
+
+        this.#logger.debug(`Descriptor cache for entity ${entity} -> component ${component} set to "${resolvedDescriptor}"`)
+    }
+
+    #handleEntityCreated = (payload: unknown) => {
+        const entity = payload as Entity
+        if (this.#descriptorCache.get(entity)) {
+            this.#logger.warn(`Attempted to add entity ${entity} as a new entry in the descriptor cache, but an entry already exists for it. Aborting.`)
+            return
+        }
+
+        this.#descriptorCache.set(entity, new Map())
+    }
+
+    #handleEntityDestroyed = (payload: unknown) => {
+        const entity = payload as Entity
+        if (!this.#descriptorCache.get(entity)) {
+            this.#logger.warn(`Attempted to remove entity ${entity} from the descriptor cache, but there is no entry for it. Aborting.`)
+            return
+        }
+
+        this.#descriptorCache.delete(entity)
+    }
+}
+
+/**
+ * eztodo docs
+ *
+ * Must be initialized before use and disposed of after use (with the `using` keyword or the `dispose` method)
+ *
+ * @example
+ * using semanticResolutionSystem1 = createSemanticResolutionSystem(eventBus)
+ * semanticResolutionSystem1.init() // no need to dispose if using the 'using' keyword
+ *
+ * // or
+ *
+ * const semanticResolutionSystem2 = createSemanticResolutionSystem(eventBus)
+ * semanticResolutionSystem2.init()
+ * semanticResolutionSystem2.dispose()
+ */
+export function createSemanticResolutionSystem(ecs: ECS<EngineComponentSchema>, eventBus: EventBus, logger?: Logger) {
+    const system = new SemanticResolutionSystem(ecs, eventBus, logger)
+
+    const { proxy, revoke } = Proxy.revocable(system, {});
+
+    proxy.dispose = () => {
+        system.dispose()
+
+        revoke()
+    }
+
+    return proxy as SemanticResolutionSystem
+}

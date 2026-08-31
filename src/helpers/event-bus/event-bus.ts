@@ -13,6 +13,9 @@ import type { Logger } from '@/helpers/logger/logger.types'
 
 export const defaultEmitStreams = {
   narrate: 'narrate',
+  ecsComponentModified: 'ecs-component-modified',
+  ecsEntityCreated: 'ecs-entity-created',
+  ecsEntityDestroyed: 'ecs-entity-destroyed',
 } as const
 
 export const WILDCARD = '*'

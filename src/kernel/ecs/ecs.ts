@@ -1,10 +1,12 @@
 import { DefaultLogger } from '@/helpers/logger/logger'
-import type { Logger } from '@/helpers/logger/logger.types'
-import type { Entity, EngineComponentSchema, ReadonlyFacade, System } from '@/kernel/ecs/ecs.types'
 import deepFreeze from '@/utilities/deepFreeze/deepFreeze'
 
+import type { Logger } from '@/helpers/logger/logger.types'
+import type { Entity, EngineComponentSchema, EcsReadonlyFacade, System } from '@/kernel/ecs/ecs.types'
+import type EventBus from '@/helpers/event-bus/event-bus'
+import { defaultEmitStreams } from '@/helpers/event-bus/event-bus'
 export default class ECS<
-  ComponentSchema extends EngineComponentSchema & Record<string, any> = EngineComponentSchema,
+  ComponentSchema extends EngineComponentSchema & Record<string, any> = EngineComponentSchema
 > {
   #nextEntityId = 1
   #activeEntities = new Set<number>()
@@ -16,15 +18,18 @@ export default class ECS<
   #systems = new Map<string, System<ComponentSchema>>()
   #prettyIdMap = new Map<string, Entity>()
   #logger: Logger
+  #emitter: EventBus
   #defaultSystemPriority: number
 
-  constructor(logger?: Logger, defaultSystemPriority = 50) {
+  constructor(emitter: EventBus, logger?: Logger, defaultSystemPriority = 50) {
     this.#logger = logger ?? new DefaultLogger()
+    this.#emitter = emitter
 
     // Bootstrap the required system components
     this.#components.set('Tags', new Map())
     this.#components.set('Meta', new Map())
     this.#logger.debug('ECS initialized with built-in Tags and Meta components')
+
     this.#defaultSystemPriority = defaultSystemPriority
   }
 
@@ -56,7 +61,7 @@ export default class ECS<
     return result
   }
 
-  defineComponent<ComponentName extends keyof ComponentSchema & string>(name: ComponentName) {
+  defineComponent(name: keyof ComponentSchema & string) {
     if (this.#components.has(name)) {
       throw new Error(`Component named ${String(name)} already exists`)
     }
@@ -90,6 +95,8 @@ export default class ECS<
 
     this.#logger.info(`Entity ${id} created (metaId: "${metaIdToSet}")`)
 
+    this.#emitter.emit(defaultEmitStreams.ecsEntityCreated, id)
+
     return id
   }
 
@@ -121,7 +128,7 @@ export default class ECS<
 
   // destructive; overwrites existing component data, if any
   setComponentOnEntity<ComponentName extends keyof ComponentSchema & string>(
-    entity: number,
+    entity: Entity,
     name: ComponentName,
     data: ComponentSchema[ComponentName],
   ): void {
@@ -138,6 +145,8 @@ export default class ECS<
     this.#logger.debug(
       `${isOverwrite ? 'Overwrote' : 'Set'} component "${name}" on entity ${entity}`,
     )
+
+    this.#emitter.emit(defaultEmitStreams.ecsComponentModified, { entity, component: name })
   }
 
   // merge component data with new data
@@ -172,6 +181,8 @@ export default class ECS<
       ...existingComponentData,
       ...data,
     })
+
+    this.#emitter.emit(defaultEmitStreams.ecsComponentModified, { entity, component: name })
   }
 
   removeComponentFromEntity<ComponentName extends keyof ComponentSchema & string>(
@@ -189,6 +200,7 @@ export default class ECS<
     }
 
     store.delete(entity)
+    this.#emitter.emit(defaultEmitStreams.ecsComponentModified, { entity, component: componentType })
     this.#logger.debug(`Removed component "${componentType}" from entity ${entity}`)
   }
 
@@ -215,7 +227,7 @@ export default class ECS<
   entityHasComponent<ComponentName extends keyof ComponentSchema & string>(
     entity: Entity,
     componentType: ComponentName,
-  ) {
+  ): boolean {
     this.#assertEntityExists(entity, 'check for component presence on')
 
     const component = this.#components.get(componentType)
@@ -230,13 +242,13 @@ export default class ECS<
     return result
   }
 
-  getComponentsOnEntity<ComponentName extends keyof ComponentSchema>(
+  getComponentsOnEntity(
     entity: Entity,
-  ): ComponentName[] {
+  ): (keyof ComponentSchema & string)[] {
     this.#assertEntityExists(entity, 'get components on')
 
     const components = Array.from(this.#components).flatMap(([componentName]) =>
-      this.entityHasComponent(entity, componentName) ? [componentName as ComponentName] : [],
+      this.entityHasComponent(entity, componentName as keyof ComponentSchema & string) ? [componentName as keyof ComponentSchema & string] : [],
     )
     this.#logger.debug(`Components on entity ${entity}: [${components.join(', ')}]`)
     return components
@@ -289,6 +301,11 @@ export default class ECS<
     this.#assertEntityExists(entity, 'destroy')
 
     const prettyId = this.getEntityComponentData(entity, 'Meta').id
+
+    if (!prettyId) {
+      throw new Error(`Critical logic error: Attempting to destroy entity ${entity}, but it has no pretty ID. All entities must have the Meta component and a pretty ID.`)
+    }
+
     this.#logger.debug(`Destroying entity ${entity}; clearing all component data`)
 
     for (const store of this.#components.values()) {
@@ -297,6 +314,7 @@ export default class ECS<
 
     this.#activeEntities.delete(entity)
     this.#prettyIdMap.delete(prettyId)
+    this.#emitter.emit(defaultEmitStreams.ecsEntityDestroyed, entity)
     this.#logger.info(`Entity ${entity} destroyed`)
   }
 
@@ -308,6 +326,13 @@ export default class ECS<
 
     if (tagData) {
       tagData.list.add(tag)
+      this.#emitter.emit(
+        defaultEmitStreams.ecsComponentModified,
+        {
+          entity,
+          component: 'Tags',
+        }
+      )
       this.#logger.debug(`Added tag "${tag}" to entity ${entity}`)
     }
   }
@@ -316,7 +341,7 @@ export default class ECS<
     this.#assertEntityExists(entity, 'check for tags on')
 
     const tagData = this.getEntityComponentData(entity, 'Tags')
-    const result = tagData?.list.has(tag) ?? false
+    const result = tagData?.list?.has(tag) ?? false
     this.#logger.debug(`entityHasTag(${entity}, "${tag}"): ${result}`)
     return result
   }
@@ -333,7 +358,7 @@ export default class ECS<
     return result
   }
 
-  getReadonlyFacade(): ReadonlyFacade<ComponentSchema> {
+  getReadonlyFacade(): EcsReadonlyFacade<ComponentSchema> {
     this.#logger.debug('Creating readonly facade')
     return {
       entityExists: this.entityExists.bind(this),

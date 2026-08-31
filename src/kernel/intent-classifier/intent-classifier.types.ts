@@ -1,7 +1,11 @@
-import type { IntentClassificationResponse } from '@/kernel/intent-pipeline/intent-pipeline.types';
+import type { IntentClassificationResponse } from '@/kernel/intent-pipeline/intent-pipeline.types'
 
 export const ENTITY_GROUP_TARGET = 'TARGET'
 export const ENTITY_GROUP_AUX = 'AUXILIARY'
+
+// the standard classification used by the text classification pipeline which indicates
+// the user entered text that doesn't map cleanly onto a known Intent
+export const ACTION_NAME_UNKNOWN = 'UNKNOWN'
 
 // the intermediate representation of objects in user commands coming
 // from the NER-classification model
