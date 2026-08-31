@@ -53,10 +53,12 @@ class SemanticResolutionSystem<
             this.#handleEntityDestroyed,
         )
 
+        // eztodo add default resolvers for meta and tags components
+
+        this.rebuildCache()
         this.#initialized = true
         this.#logger.info('Semantic Resolution System initialized; all listeners added')
 
-        // eztodo populate cache with existing info from ecs
     }
 
     dispose() {
