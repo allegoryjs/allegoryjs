@@ -27,14 +27,15 @@ export interface EcsReadonlyFacade<
   getEntityByPrettyId(prettyId: string): Entity | undefined
   getComponentsOnEntity(
     entity: Entity,
-  ): (keyof ComponentSchema & string)[]
+  ): Set<(keyof ComponentSchema & string)>
   getEntitiesByComponents<ComponentName extends keyof ComponentSchema & string>(
     ...componentTypes: ComponentName[]
-  ): Entity[]
+  ): Set<Entity>
   getEntityComponentData<ComponentName extends keyof ComponentSchema & string>(
     entity: Entity,
     name: ComponentName,
   ): Readonly<ComponentSchema[ComponentName]>
+  getActiveEntities(): Set<Entity>
 }
 
 export interface System<ComponentSchema extends EngineComponentSchema & Record<string, any> = EngineComponentSchema> {

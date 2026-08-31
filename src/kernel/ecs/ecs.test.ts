@@ -439,7 +439,7 @@ describe('getComponentsOnEntity', () => {
   test('returns built-in components for a fresh entity', () => {
     const ecs = makeECS()
     const e = ecs.createEntity()
-    const components = ecs.getComponentsOnEntity(e)
+    const components = Array.from(ecs.getComponentsOnEntity(e))
     expect(components).toContain('Tags')
     expect(components).toContain('Meta')
   })
@@ -453,7 +453,7 @@ describe('getComponentsOnEntity', () => {
       x: 0,
       y: 0,
     })
-    const components = ecs.getComponentsOnEntity(e)
+    const components = Array.from(ecs.getComponentsOnEntity(e))
     expect(components).toContain('position')
     expect(components).not.toContain('velocity')
   })
@@ -467,7 +467,7 @@ describe('getComponentsOnEntity', () => {
       y: 0,
     })
     ecs.removeComponentFromEntity(e, 'position')
-    expect(ecs.getComponentsOnEntity(e)).not.toContain('position')
+    expect(Array.from(ecs.getComponentsOnEntity(e))).not.toContain('position')
   })
 })
 
@@ -476,7 +476,7 @@ describe('getComponentsOnEntity', () => {
 describe('getEntitiesByComponents', () => {
   test('returns empty array for no component types', () => {
     const ecs = makeECS()
-    expect(ecs.getEntitiesByComponents()).toEqual([])
+    expect(Array.from(ecs.getEntitiesByComponents())).toEqual([])
   })
 
   test('returns entities matching a single component', () => {
@@ -492,7 +492,7 @@ describe('getEntitiesByComponents', () => {
       x: 1,
       y: 1,
     })
-    expect(ecs.getEntitiesByComponents('position')).toEqual([e1, e2])
+    expect(Array.from(ecs.getEntitiesByComponents('position'))).toEqual([e1, e2])
   })
 
   test('returns entities matching multiple components', () => {
@@ -513,7 +513,7 @@ describe('getEntitiesByComponents', () => {
       x: 0,
       y: 0,
     })
-    expect(ecs.getEntitiesByComponents('position', 'velocity')).toEqual([e1])
+    expect(Array.from(ecs.getEntitiesByComponents('position', 'velocity'))).toEqual([e1])
   })
 
   test('optimizes intersection by starting with the smallest store', () => {
@@ -538,14 +538,14 @@ describe('getEntitiesByComponents', () => {
 
     // velocity store has only 1 entity.
     // getEntitiesByComponents should pick velocity store first.
-    const result = ecs.getEntitiesByComponents('position', 'velocity')
+    const result = Array.from(ecs.getEntitiesByComponents('position', 'velocity'))
     expect(result.length).toBe(1)
     expect(ecs.getEntityComponentData(result[0]!, 'position').x).toBe(50)
   })
 
   test('throws for unknown component types', () => {
     const ecs = makeECS()
-    expect(() => ecs.getEntitiesByComponents('nope' as any)).toThrow('do not exist')
+    expect(() => Array.from(ecs.getEntitiesByComponents('nope' as any))).toThrow('do not exist')
   })
 
   test('does not return destroyed entities', () => {
@@ -562,14 +562,14 @@ describe('getEntitiesByComponents', () => {
       y: 1,
     })
     ecs.destroyEntity(e1)
-    expect(ecs.getEntitiesByComponents('position')).toEqual([e2])
+    expect(Array.from(ecs.getEntitiesByComponents('position'))).toEqual([e2])
   })
 
   test('returns empty when no entities have the components', () => {
     const ecs = makeECS()
     ecs.defineComponent('position')
     ecs.createEntity() // no position set
-    expect(ecs.getEntitiesByComponents('position')).toEqual([])
+    expect(Array.from(ecs.getEntitiesByComponents('position'))).toEqual([])
   })
 })
 
@@ -593,7 +593,7 @@ describe('destroyEntity', () => {
     })
     ecs.destroyEntity(e)
     // entity is gone; querying components should not find it
-    expect(ecs.getEntitiesByComponents('position')).toEqual([])
+    expect(Array.from(ecs.getEntitiesByComponents('position'))).toEqual([])
   })
 
   test('destroying same entity twice throws', () => {
@@ -724,7 +724,7 @@ describe('getReadonlyFacade', () => {
       x: 5,
       y: 10,
     })
-    expect(facade.getEntitiesByComponents('position')).toEqual([e])
+    expect(Array.from(facade.getEntitiesByComponents('position'))).toEqual([e])
     expect(facade.getComponentsOnEntity(e)).toContain('position')
   })
 
@@ -934,7 +934,7 @@ describe('multi-entity integration', () => {
 
     // destroy projectile
     ecs.destroyEntity(projectile)
-    expect(ecs.getEntitiesByComponents('position', 'velocity')).toEqual([player])
+    expect(Array.from(ecs.getEntitiesByComponents('position', 'velocity'))).toEqual([player])
     expect(ecs.entityExists(projectile)).toBe(false)
   })
 
@@ -955,17 +955,17 @@ describe('multi-entity integration', () => {
       return e
     })
 
-    const withLabel = ecs.getEntitiesByComponents('position', 'label')
+    const withLabel = Array.from(ecs.getEntitiesByComponents('position', 'label'))
     // indices 0, 3, 6, 9, 12, 15, 18 → 7 entities
     expect(withLabel.length).toBe(7)
 
-    const allPositioned = ecs.getEntitiesByComponents('position')
+    const allPositioned = Array.from(ecs.getEntitiesByComponents('position'))
     expect(allPositioned.length).toBe(20)
 
     // destroy a few
     ecs.destroyEntity(entities[0]!)
     ecs.destroyEntity(entities[3]!)
-    expect(ecs.getEntitiesByComponents('position', 'label').length).toBe(5)
-    expect(ecs.getEntitiesByComponents('position').length).toBe(18)
+    expect(Array.from(ecs.getEntitiesByComponents('position', 'label')).length).toBe(5)
+    expect(Array.from(ecs.getEntitiesByComponents('position')).length).toBe(18)
   })
 })

@@ -3,8 +3,15 @@ import type EventBus from '@/helpers/event-bus/event-bus'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type { EngineComponentSchema, Entity, EcsReadonlyFacade } from '@/kernel/ecs/ecs.types'
-import type ECS from '@/kernel/ecs/ecs'
 
+function buildDescriptor<ComponentSchema extends EngineComponentSchema & Record<string, any>>(
+    descriptors: Map<keyof ComponentSchema & string, string>
+) {
+    return Array.from(descriptors).reduce(
+        (acc, [_, descriptor]) => `${acc} ; ${descriptor}`,
+        ''
+    )
+}
 class SemanticResolutionSystem<
     ComponentSchema extends EngineComponentSchema & Record<string, any> = EngineComponentSchema,
 > {
@@ -14,13 +21,15 @@ class SemanticResolutionSystem<
     #logger: Logger
     #descriptorCache: Map<Entity, Map<keyof ComponentSchema & string, string>>
     #resolvers: Map<keyof ComponentSchema & string, (componentData: any) => string>
+    #descriptorBuilder: (descriptors: Map<keyof ComponentSchema & string, string>) => string
 
-    constructor(ecs: EcsReadonlyFacade<ComponentSchema>, eventBus: EventBus, logger?: Logger) {
+    constructor(ecs: EcsReadonlyFacade<ComponentSchema>, eventBus: EventBus, logger?: Logger, customDescriptorBuilder?: (descriptors: Map<keyof ComponentSchema & string, string>) => string) {
         this.#ecs = ecs
         this.#eventBus = eventBus
         this.#logger = logger ?? new DefaultLogger()
         this.#descriptorCache = new Map()
         this.#resolvers = new Map()
+        this.#descriptorBuilder = customDescriptorBuilder ?? buildDescriptor<ComponentSchema>
     }
 
     init() {
@@ -105,6 +114,52 @@ class SemanticResolutionSystem<
         this.#logger.info(`Removed resolver for component ${componentName}`)
     }
 
+    getEntityDescriptor(entity: Entity) {
+        if (!this.#ecs.entityExists(entity)) {
+            // eztodo make sure all throws also have logger.error, and maybe make a util to do both in one
+            const err = `Attempting to get descriptor for entity ${entity}, but no such entity exists`
+            this.#logger.error(err)
+            throw new Error(err)
+        }
+
+        const descriptorCache = this.#descriptorCache.get(entity)
+
+        if (!descriptorCache) {
+            this.#logger.warn(`
+                Attempting to get descriptor, but no descriptor cache exists for entity ${entity}.
+                You can call rebuildCache to rectify this, but the cache should be getting built automatically.
+                You should verify that the ECS and semantic resolver are communicating properly through the event bus.
+                Aborting.
+            `)
+            return
+        }
+
+        return this.#descriptorBuilder(descriptorCache)
+    }
+
+    rebuildCache() {
+        this.#logger.debug('Rebuilding descriptor cache for all entities')
+
+        this.#descriptorCache = Array.from(this.#ecs.getActiveEntities()).reduce((accOuter, entity) => {
+            const cache = Array.from(this.#ecs.getComponentsOnEntity(entity)).reduce((accInner, component) => {
+                const resolver = this.#resolvers.get(component)
+
+                if (!resolver) {
+                    this.#logger.info(`While rebuilding the descriptor cache, component ${component} was skipped because it has no resolver`)
+                } else {
+                    const componentData = this.#ecs.getEntityComponentData(entity, component)
+                    accInner.set(component, resolver(componentData))
+                }
+
+                return accInner
+
+            }, new Map<keyof ComponentSchema & string, string>())
+
+            accOuter.set(entity, cache)
+            return accOuter
+        }, new Map<Entity, Map<keyof ComponentSchema & string, string>>())
+    }
+
     #handleComponentModified = (payload: unknown) => {
         const { entity, component } = payload as { entity: Entity, component: keyof ComponentSchema & string }
         const componentData = this.#ecs.getEntityComponentData(entity, component)
@@ -173,16 +228,28 @@ class SemanticResolutionSystem<
  * semanticResolutionSystem2.init()
  * semanticResolutionSystem2.dispose()
  */
-export function createSemanticResolutionSystem(ecs: ECS<EngineComponentSchema>, eventBus: EventBus, logger?: Logger) {
-    const system = new SemanticResolutionSystem(ecs, eventBus, logger)
+export function createSemanticResolutionSystem<
+    ComponentSchema extends EngineComponentSchema & Record<string, any> = EngineComponentSchema
+>(ecs: EcsReadonlyFacade<ComponentSchema>, eventBus: EventBus, logger?: Logger) {
+    const system = new SemanticResolutionSystem<ComponentSchema>(ecs, eventBus, logger)
 
-    const { proxy, revoke } = Proxy.revocable(system, {});
+    const { proxy, revoke } = Proxy.revocable(system, {
+        get(target, prop, receiver) {
+            if (prop === 'dispose') {
+                return () => {
+                    target.dispose();
+                    revoke();
+                };
+            }
 
-    proxy.dispose = () => {
-        system.dispose()
+            const value = Reflect.get(target, prop, receiver);
+            if (typeof value === 'function') {
+                return value.bind(target);
+            }
 
-        revoke()
-    }
+            return value;
+        }
+    });
 
-    return proxy as SemanticResolutionSystem
+    return proxy as SemanticResolutionSystem<ComponentSchema>
 }

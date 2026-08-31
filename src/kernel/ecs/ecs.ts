@@ -244,20 +244,20 @@ export default class ECS<
 
   getComponentsOnEntity(
     entity: Entity,
-  ): (keyof ComponentSchema & string)[] {
+  ): Set<(keyof ComponentSchema & string)> {
     this.#assertEntityExists(entity, 'get components on')
 
     const components = Array.from(this.#components).flatMap(([componentName]) =>
       this.entityHasComponent(entity, componentName as keyof ComponentSchema & string) ? [componentName as keyof ComponentSchema & string] : [],
     )
     this.#logger.debug(`Components on entity ${entity}: [${components.join(', ')}]`)
-    return components
+    return new Set(components)
   }
 
   getEntitiesByComponents<ComponentName extends keyof ComponentSchema & string>(
     ...componentTypes: ComponentName[]
-  ): Entity[] {
-    if (componentTypes.length === 0) return []
+  ): Set<Entity> {
+    if (componentTypes.length === 0) return new Set()
 
     this.#logger.debug(`Querying entities by components: [${componentTypes.join(', ')}]`)
 
@@ -279,7 +279,7 @@ export default class ECS<
     }
     const smallestStore = this.#components.get(smallestType)
 
-    if (!smallestStore || smallestStore.size === 0) return []
+    if (!smallestStore || smallestStore.size === 0) return new Set()
 
     this.#logger.debug(
       `Using "${smallestType}" as smallest store (size: ${smallestStore.size}) for intersection`,
@@ -294,7 +294,7 @@ export default class ECS<
 
     this.#logger.debug(`Query result: [${result.join(', ')}] (${result.length} entities)`)
 
-    return result
+    return new Set(result)
   }
 
   destroyEntity(entity: Entity) {
@@ -358,6 +358,10 @@ export default class ECS<
     return result
   }
 
+  getEntityList() {
+    return structuredClone(this.#activeEntities)
+  }
+
   getReadonlyFacade(): EcsReadonlyFacade<ComponentSchema> {
     this.#logger.debug('Creating readonly facade')
     return {
@@ -368,6 +372,7 @@ export default class ECS<
       getComponentsOnEntity: this.getComponentsOnEntity.bind(this),
       getEntityComponentData: this.getEntityComponentData.bind(this),
       getEntityByPrettyId: this.getEntityByPrettyId.bind(this),
+      getActiveEntities: this.getEntityList.bind(this)
     }
   }
 }
