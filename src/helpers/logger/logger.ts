@@ -74,6 +74,11 @@ export class DefaultLogger implements Logger {
     }
   }
 
+  errorAndThrow(message: string) {
+    this.error(message)
+    throw new Error(message)
+  }
+
   warn(...args: any[]) {
     if (this.#enableWarn) {
       console.warn('[WARN]', ...args)

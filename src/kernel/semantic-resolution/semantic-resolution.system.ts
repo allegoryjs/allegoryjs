@@ -53,12 +53,9 @@ class SemanticResolutionSystem<
             this.#handleEntityDestroyed,
         )
 
-        // eztodo add default resolvers for meta and tags components
-
         this.rebuildCache()
         this.#initialized = true
         this.#logger.info('Semantic Resolution System initialized; all listeners added')
-
     }
 
     dispose() {
@@ -118,7 +115,6 @@ class SemanticResolutionSystem<
 
     getEntityDescriptor(entity: Entity) {
         if (!this.#ecs.entityExists(entity)) {
-            // eztodo make sure all throws also have logger.error, and maybe make a util to do both in one
             const err = `Attempting to get descriptor for entity ${entity}, but no such entity exists`
             this.#logger.error(err)
             throw new Error(err)
