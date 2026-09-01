@@ -49,13 +49,11 @@ export default class ECS<
     if (!this.#activeEntities.has(entity)) {
       if (entity < 1 || entity >= this.#nextEntityId) {
         const err = `Can't ${entityOperation} entity ${entity}; entity does not exist`
-        this.#logger.error(err)
-        throw new Error(err)
+        this.#logger.errorAndThrow(err)
       }
 
       const err = `Can't ${entityOperation} entity ${entity}; entity is destroyed`
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
   }
 
@@ -68,8 +66,7 @@ export default class ECS<
   defineComponent(name: keyof ComponentSchema & string) {
     if (this.#components.has(name)) {
       const err = `Component named ${String(name)} already exists`
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
 
     this.#components.set(name, new Map())
@@ -81,8 +78,7 @@ export default class ECS<
   createEntity(metaId?: string) {
     if (metaId && this.#prettyIdMap.has(metaId)) {
       const err = `Cannot register new entity with pretty ID ${metaId}; entity ${this.#prettyIdMap.get(metaId)} is already assigned that ID`
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
     const id = this.#nextEntityId++
 
@@ -112,8 +108,7 @@ export default class ECS<
     if (this.#systems.has(name)) {
       const err = `Cannot register system: system with name ${name} is already registered`
 
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
 
     this.#systems.set(name, system)
@@ -124,8 +119,7 @@ export default class ECS<
     if (!this.#systems.has(systemName)) {
       const err = `Cannot deregister system: system with name ${systemName} is not registered`
 
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
 
     this.#systems.delete(systemName)
@@ -142,8 +136,7 @@ export default class ECS<
 
     if (!store) {
       const err = `Can't set component on entity ${entity}; unknown component type: ${name}`
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
 
     this.#assertEntityExists(entity, 'set component on')
@@ -169,16 +162,14 @@ export default class ECS<
 
     if (!store) {
       const err = `Can't update component data for entity ${entity}; Unknown component type: ${name}`
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
 
     const existingComponentData = store.get(entity)
 
     if (!existingComponentData) {
       const err = `Can't update component data for entity ${entity}; entity does not have component ${name}`
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
 
     this.#logger.debug(
@@ -203,8 +194,7 @@ export default class ECS<
 
     if (!store) {
       const err = `Can't remove component from entity ${entity}; unknown component type: ${componentType}`
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
 
     store.delete(entity)
@@ -223,8 +213,7 @@ export default class ECS<
 
     if (!store || !componentData) {
       const err = `Can't get component data for entity ${entity}; entity does not have component ${name}`
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
 
     this.#logger.debug(`Retrieved component "${name}" data for entity ${entity}`)
@@ -242,8 +231,7 @@ export default class ECS<
 
     if (!component) {
       const err = `Can't check for component presence on entity ${entity}; component ${componentType} does not exist`
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
     const result = component.has(entity)
     this.#logger.debug(`entityHasComponent(${entity}, "${componentType}"): ${result}`)
@@ -272,8 +260,7 @@ export default class ECS<
     if (!componentTypes.every((type) => this.isComponent(type))) {
       const missingTypes = componentTypes.filter((type) => !this.isComponent(type))
       const err = `Cannot get entities by component: given components ${missingTypes.join(', ')} do not exist`
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
 
     const sortedTypes = componentTypes.toSorted((a, b) => {
@@ -284,8 +271,7 @@ export default class ECS<
 
     if (!smallestType) {
       const err = 'Failed to sort component types'
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
     const smallestStore = this.#components.get(smallestType)
 
@@ -314,8 +300,7 @@ export default class ECS<
 
     if (!prettyId) {
       const err = `Critical logic error: Attempting to destroy entity ${entity}, but it has no pretty ID. All entities must have the Meta component and a pretty ID.`
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
 
     this.#logger.debug(`Destroying entity ${entity}; clearing all component data`)

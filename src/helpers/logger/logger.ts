@@ -74,7 +74,7 @@ export class DefaultLogger implements Logger {
     }
   }
 
-  errorAndThrow(message: string) {
+  errorAndThrow(message: string): never {
     this.error(message)
     throw new Error(message)
   }

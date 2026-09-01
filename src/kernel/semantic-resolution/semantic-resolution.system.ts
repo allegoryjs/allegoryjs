@@ -116,8 +116,7 @@ class SemanticResolutionSystem<
     getEntityDescriptor(entity: Entity) {
         if (!this.#ecs.entityExists(entity)) {
             const err = `Attempting to get descriptor for entity ${entity}, but no such entity exists`
-            this.#logger.error(err)
-            throw new Error(err)
+            this.#logger.errorAndThrow(err)
         }
 
         const descriptorCache = this.#descriptorCache.get(entity)

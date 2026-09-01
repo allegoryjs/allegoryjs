@@ -9,5 +9,6 @@ export interface Logger {
   info: (...args: any[]) => void
   debug: (...args: any[]) => void
   error: (...args: any[]) => void
+  errorAndThrow: (message: string) => never
   warn: (...args: any[]) => void
 }

@@ -127,14 +127,12 @@ export default class IntentPipeline<
         if (![componentName, property].every((str) => !!str)) {
           const err =
             'Invalid property matcher. Property matchers must be in the format of "ComponentName.propName"'
-          this.#logger.error(err)
-          throw new Error(err)
+          this.#logger.errorAndThrow(err)
         }
 
         if (!this.#ecs.isComponent(componentName)) {
           const err = `Property matchers must be valid components (received ${componentName})`
-          this.#logger.error(err)
-          throw new Error(err)
+          this.#logger.errorAndThrow(err)
         }
 
         const componentData = this.#ecs.getEntityComponentData(entity, componentName)
@@ -440,8 +438,7 @@ export default class IntentPipeline<
         // if the entity identifier is a string, it is an alias
         if (typeof mutation.entity === 'string' && !futureAliases.has(mutation.entity)) {
           const err = `Critical logic error: Law mutation operation referenced unknown alias '${mutation.entity}'. Mutations may have been declared out of order; an entity with an alias must be CREATE-ed before it is referenced by a mutation operation.`
-          this.#logger.error(err)
-          throw new Error(err)
+          this.#logger.errorAndThrow(err)
         }
       }
     }
@@ -469,8 +466,7 @@ export default class IntentPipeline<
         entity = aliasMap.get(mutation.entity)!
       } else {
         const err = `Critical logic error: attempting to use nonexistent entity with alias ${mutation.entity}`
-        this.#logger.error(err)
-        throw new Error(err)
+        this.#logger.errorAndThrow(err)
       }
     } else {
       entity = mutation.entity
@@ -481,8 +477,7 @@ export default class IntentPipeline<
       // so if this occurs, it is likely an engine bug
       const err = `Invalid alias ${mutation.entity} referenced in mutation op`
 
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
 
     if (mutation.op === LawMutationOpType.remove) {
@@ -616,8 +611,7 @@ export default class IntentPipeline<
       if (!intentResponse?.intent) {
         const err = 'Intent response does not contain a valid intent'
 
-        this.#logger.error(err)
-        throw new Error(err)
+        this.#logger.errorAndThrow(err)
       }
 
       const { intent, dryRun } = intentResponse
@@ -639,8 +633,7 @@ export default class IntentPipeline<
     if (this.#laws.has(newLaw.name)) {
       const err = `Error ratifying Law ${newLaw.name}; a Law with this name is already registered`
 
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
 
     this.#logger.info(`Ratifying new law ${newLaw.name}`)
@@ -651,8 +644,7 @@ export default class IntentPipeline<
     if (!this.#laws.has(name)) {
       const err = `Error repealing Law ${name}; no Law with this name is registered`
 
-      this.#logger.error(err)
-      throw new Error(err)
+      this.#logger.errorAndThrow(err)
     }
 
     this.#logger.info(`Repealing Law ${name}`)

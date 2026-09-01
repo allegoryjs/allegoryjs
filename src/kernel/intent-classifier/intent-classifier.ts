@@ -31,8 +31,7 @@ export class IntentClassifier {
             const error = `Error creating IntentClassifier: config.${name} must be a number between 0 and 1 (inclusive); received ${cfgValue}`
 
             if (!thresholdIsValid(cfgValue)) {
-                this.#logger.error(error)
-                throw new Error()
+                this.#logger.errorAndThrow(error)
             }
         })
 
