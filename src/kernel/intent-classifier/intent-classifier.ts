@@ -19,8 +19,8 @@ export class IntentClassifier {
     #logger: Logger
     #initialized = false
     #config: IntentClassifierConfig
-    #actionPipeline: TextClassificationPipeline
-    #nerPipeline: TokenClassificationPipeline
+    #actionPipeline?: TextClassificationPipeline
+    #nerPipeline?: TokenClassificationPipeline
 
     constructor(config: IntentClassifierConfig, logger?: DefaultLogger) {
         this.#logger = logger ?? new DefaultLogger()
@@ -28,9 +28,9 @@ export class IntentClassifier {
         const thresholdProperties = ['actionModelConfidenceThreshold', 'nerModelConfidenceThreshold'] as const
         thresholdProperties.forEach((name) => {
             const cfgValue = config[name]
-            const error = `Error creating IntentClassifier: config.${name} must be a number between 0 and 1 (inclusive); received ${cfgValue}`
 
             if (!thresholdIsValid(cfgValue)) {
+                const error = `Error creating IntentClassifier: config.${name} must be a number between 0 and 1 (inclusive); received ${cfgValue}`
                 this.#logger.errorAndThrow(error)
             }
         })
@@ -61,6 +61,8 @@ export class IntentClassifier {
     }
 
     async getIntentsFromInput(command: string): Promise<Intent[]> {
+        this.#assertReady()
+
         // eztodo splitRawCommands should be injected so different languages are usable; don't assume en-US
         const classifiedCommands = splitRawCommands(command).map(async (splitCommand) => {
             // eztodo error handling
@@ -75,8 +77,17 @@ export class IntentClassifier {
         })
     }
 
+    #assertReady() {
+        const ready = this.#initialized && !!this.#nerPipeline && !!this.#actionPipeline
+
+        if (!ready) {
+            this.#logger.errorAndThrow('Cannot get intents from input: Intent Classifier not initialized')
+        }
+    }
+
     async #classifyAction(command: string): Promise<ClassifiedAction> {
-        const classifier = await this.#actionPipeline(command, { top_k: 1 })
+        this.#assertReady()
+        const classifier = await this.#actionPipeline!(command, { top_k: 1 })
         const { label, score } = classifier[0]! // the pipeline is configured to always output 1 result (`top_k: 1` above)
 
         return {
@@ -86,8 +97,10 @@ export class IntentClassifier {
     }
 
     async #classifyNer(command: string): Promise<ClassifiedNer> {
+        this.#assertReady()
+
         // eztodo err handling
-        const tokens = await this.#nerPipeline(
+        const tokens = await this.#nerPipeline!(
             command,
             { aggregation_strategy: 'simple' }
         );
@@ -115,6 +128,6 @@ export class IntentClassifier {
     }
 
     async #matchEntities() {
-
+        this.#assertReady()
     }
 }

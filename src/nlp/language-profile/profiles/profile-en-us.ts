@@ -12,6 +12,7 @@ import type { SplitCommand } from '@/nlp/language-profile/language-profile.types
  * the latter commands should be considered interrogative too, even if they don't contain a prefix indicating it
  */
 export function splitRawCommands(rawCommand: string): SplitCommand[] {
+  // eztodo use compromise isQuestion instead of this regex
   const prefixRegex =
     /^(?:would i be able to|could i|can i|is it possible to|may i|am i able to)\s*/i
 
