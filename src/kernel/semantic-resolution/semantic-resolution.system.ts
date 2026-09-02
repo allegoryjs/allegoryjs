@@ -1,16 +1,23 @@
 import { defaultEmitStreams } from '@/helpers/event-bus/event-bus'
-import type EventBus from '@/helpers/event-bus/event-bus'
 import { DefaultLogger } from '@/helpers/logger/logger'
+
+import type EventBus from '@/helpers/event-bus/event-bus'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type { EngineComponentSchema, Entity, EcsReadonlyFacade } from '@/kernel/ecs/ecs.types'
+import type { DescriptorCacheEntry } from '@/kernel/semantic-resolution/semantic-resolution.types'
+
+const DESCRIPTOR_DELIMITER = ';;'
 
 function buildDescriptor<ComponentSchema extends EngineComponentSchema & Record<string, any>>(
     descriptors: Map<keyof ComponentSchema & string, string>
-) {
-    return Array.from(descriptors).reduce(
-        (acc, [_, descriptor]) => `${acc} ; ${descriptor}`,
-        ''
-    )
+): DescriptorCacheEntry {
+    return {
+        combined: Array.from(descriptors).reduce(
+            (acc, [_, descriptor]) => `${acc} ${DESCRIPTOR_DELIMITER} ${descriptor}`,
+            ''
+        ),
+        chunked: Array.from(descriptors.values())
+    }
 }
 class SemanticResolutionSystem<
     ComponentSchema extends EngineComponentSchema & Record<string, any> = EngineComponentSchema,
@@ -21,9 +28,9 @@ class SemanticResolutionSystem<
     #logger: Logger
     #descriptorCache: Map<Entity, Map<keyof ComponentSchema & string, string>>
     #resolvers: Map<keyof ComponentSchema & string, (componentData: any) => string>
-    #descriptorBuilder: (descriptors: Map<keyof ComponentSchema & string, string>) => string
+    #descriptorBuilder: (descriptors: Map<keyof ComponentSchema & string, string>) => DescriptorCacheEntry
 
-    constructor(ecs: EcsReadonlyFacade<ComponentSchema>, eventBus: EventBus, logger?: Logger, customDescriptorBuilder?: (descriptors: Map<keyof ComponentSchema & string, string>) => string) {
+    constructor(ecs: EcsReadonlyFacade<ComponentSchema>, eventBus: EventBus, logger?: Logger, customDescriptorBuilder?: (descriptors: Map<keyof ComponentSchema & string, string>) => DescriptorCacheEntry) {
         this.#ecs = ecs
         this.#eventBus = eventBus
         this.#logger = logger ?? new DefaultLogger()
@@ -163,7 +170,7 @@ class SemanticResolutionSystem<
         const resolver = this.#resolvers.get(component)
 
         if (!resolver) {
-            this.#logger.info(`
+            this.#logger.debug(`
                 Component modification event received, but no semantic resolver exists for component ${component}.
                 The state of this component will not be interpretable by the ML pipeline.
                 You should add a resolver using registerResolver if entities should be identifiable using data from this component.
@@ -211,9 +218,35 @@ class SemanticResolutionSystem<
 }
 
 /**
- * eztodo docs
+ * The semantic resolution system connects entities in the ECS to the NLP pipeline.
+ * **Must be initialized before use and disposed of after use (with the `using` keyword or the `dispose` method)**.
  *
- * Must be initialized before use and disposed of after use (with the `using` keyword or the `dispose` method)
+ * In order for the NLP pipeline to have a way of "understanding" the dynamic state of the game
+ * without re-training the models, this system generates `descriptors`, which are programmatically
+ * constructed from game state. A `resolver` must be provided for any components which the game
+ * engine needs to be able to associate with an entity at runtime. Descriptors should only include
+ * information that the player should know about; e.g., if an item is secretly cursed, the user should likely
+ * not be able to pick it up with "pick up the cursed amulet" until they have identified that it is cursed.
+ *
+ * For example, imagine a component called DamageComponent, which has data shaped like `{ health: 80, statusEffects: ['poisoned', 'blessed']}`
+ * The resolver for that component might look like:
+ * ```
+ * (componentState: DamageComponentState) => {
+ *   let healthLevel
+ *   if (componentState.health < 30) {
+ *       healthLevel = 'low health'
+ *   } else {
+ *       healthLevel = 'healthy'
+ *   }
+ *
+ *   const statusEffectText = componentState.statusEffects.length ? componentState.statusEffects.join(', ') : 'none'
+ *
+ *   return `Health level: ${health level}, status effects: ${statusEffectText}`
+ * }
+ *
+ * // outputs 'Health level: healthy, status effects: poisoned, blessed'
+ * ```
+ *
  *
  * @example
  * using semanticResolutionSystem1 = createSemanticResolutionSystem(eventBus)
