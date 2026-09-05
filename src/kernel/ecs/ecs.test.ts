@@ -655,6 +655,47 @@ describe('addTagToEntity / entityHasTag', () => {
   })
 })
 
+// ─── Noun ───────────────────────────────────────────────────────────
+
+describe('Noun', () => {
+  test('setNounOnEntity adds the Noun component', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+    ecs.setNounOnEntity(e, 'sword')
+    expect(ecs.entityHasComponent(e, 'Noun')).toBe(true)
+    expect(ecs.getNounOnEntity(e)).toBe('sword')
+  })
+
+  test('removeNounFromEntity removes the Noun component', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+    ecs.setNounOnEntity(e, 'shield')
+    expect(ecs.entityHasComponent(e, 'Noun')).toBe(true)
+    ecs.removeNounFromEntity(e)
+    expect(ecs.entityHasComponent(e, 'Noun')).toBe(false)
+    expect(ecs.getNounOnEntity(e)).toBeNull()
+  })
+
+  test('getEntitiesByNoun returns all entities with the given noun string', () => {
+    const ecs = makeECS()
+    const e1 = ecs.createEntity(undefined, 'apple')
+    const e2 = ecs.createEntity(undefined, 'orange')
+    const e3 = ecs.createEntity(undefined, 'apple')
+
+    const apples = ecs.getEntitiesByNoun('apple')
+    expect(apples.size).toBe(2)
+    expect(apples.has(e1)).toBe(true)
+    expect(apples.has(e3)).toBe(true)
+
+    const oranges = ecs.getEntitiesByNoun('orange')
+    expect(oranges.size).toBe(1)
+    expect(oranges.has(e2)).toBe(true)
+
+    const bananas = ecs.getEntitiesByNoun('banana')
+    expect(bananas.size).toBe(0)
+  })
+})
+
 // ─── entityExists ───────────────────────────────────────────────────
 
 describe('entityExists', () => {
@@ -692,18 +733,20 @@ describe('getEntityByPrettyId', () => {
   })
 })
 
-// ─── getReadonlyFacade ──────────────────────────────────────────────
+// ─── readonlyFacade ──────────────────────────────────────────────
 
-describe('getReadonlyFacade', () => {
+describe('readonlyFacade', () => {
   test('facade exposes read-only methods', () => {
     const ecs = makeECS()
-    const facade = ecs.getReadonlyFacade()
+    const facade = ecs.readonlyFacade
     expect(typeof facade.entityExists).toBe('function')
     expect(typeof facade.entityHasTag).toBe('function')
     expect(typeof facade.entityHasComponent).toBe('function')
     expect(typeof facade.getEntitiesByComponents).toBe('function')
     expect(typeof facade.getComponentsOnEntity).toBe('function')
     expect(typeof facade.getEntityComponentData).toBe('function')
+    expect(typeof facade.getNounOnEntity).toBe('function')
+    expect(typeof facade.getEntitiesByNoun).toBe('function')
   })
 
   test('facade methods work correctly', () => {
@@ -716,7 +759,7 @@ describe('getReadonlyFacade', () => {
     })
     ecs.addTagToEntity(e, 'hero')
 
-    const facade = ecs.getReadonlyFacade()
+    const facade = ecs.readonlyFacade
     expect(facade.entityExists(e)).toBe(true)
     expect(facade.entityHasTag(e, 'hero')).toBe(true)
     expect(facade.entityHasComponent(e, 'position')).toBe(true)
@@ -730,7 +773,7 @@ describe('getReadonlyFacade', () => {
 
   test('facade does not expose mutation methods', () => {
     const ecs = makeECS()
-    const facade = ecs.getReadonlyFacade()
+    const facade = ecs.readonlyFacade
     expect((facade as any).createEntity).toBeUndefined()
     expect((facade as any).destroyEntity).toBeUndefined()
     expect((facade as any).setComponentOnEntity).toBeUndefined()

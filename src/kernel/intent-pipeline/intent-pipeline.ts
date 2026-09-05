@@ -21,6 +21,7 @@ import type {
   LawContextOpts,
   MutationOp,
 } from '@/kernel/intent-pipeline/intent-pipeline.types'
+
 import type { IntentClassificationModule } from '../intent-classifier/intent-classifier.types'
 
 /**
@@ -387,7 +388,7 @@ export default class IntentPipeline<
         targets: intent.targets,
         auxiliary: reorderedAuxiliaries,
         originalAuxiliaries: intent.auxiliary,
-        ecsUtils: this.#ecs.getReadonlyFacade(),
+        ecsUtils: this.#ecs.readonlyFacade,
         dryRun,
       })
 

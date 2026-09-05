@@ -10,35 +10,35 @@ export const ACTION_NAME_UNKNOWN = 'UNKNOWN'
 // the intermediate representation of objects in user commands coming
 // from the NER-classification model
 export interface NerResponseItem {
-    entity_group: string
-    word: string
-    score: number // normalized from 0 - 1
+  entity_group: string
+  word: string
+  score: number // normalized from 0 - 1
 }
 
 export interface ClassifiedAction {
-    action: string
-    confidence: number // normalized from 0 - 1
+  action: string
+  confidence: number // normalized from 0 - 1
 }
 
 export interface ClassifiedNerTarget {
-    word: string
-    confidence: number // normalized from 0 - 1
+  word: string
+  confidence: number // normalized from 0 - 1
 }
 
 export interface ClassifiedNerImplement {
-    word: string
-    confidence: number // normalized from 0 - 1
+  word: string
+  confidence: number // normalized from 0 - 1
 }
 
 export interface ClassifiedNer {
-    targets: ClassifiedNerTarget[]
-    auxiliaries: ClassifiedNerImplement[]
+  targets: ClassifiedNerTarget[]
+  auxiliaries: ClassifiedNerImplement[]
 }
 
 export interface IntentClassifierConfig {
-    actionModelUrl: string
-    actionModelConfidenceThreshold?: number // 0 - 1
+  actionModelUrl: string
+  actionModelConfidenceThreshold?: number // 0 - 1
 
-    nerModelUrl: string
-    nerModelConfidenceThreshold?: number // 0 - 1
+  nerModelUrl: string
+  nerModelConfidenceThreshold?: number // 0 - 1
 }

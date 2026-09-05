@@ -1,4 +1,4 @@
 export interface DescriptorCacheEntry {
-    combined: string
-    chunked: string[]
+  combined: string
+  chunked: string[]
 }

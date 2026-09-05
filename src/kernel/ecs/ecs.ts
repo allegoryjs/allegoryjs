@@ -1,12 +1,16 @@
-import { DefaultLogger } from '@/helpers/logger/logger'
-import deepFreeze from '@/utilities/deepFreeze/deepFreeze'
-
-import type { Logger } from '@/helpers/logger/logger.types'
-import type { Entity, EngineComponentSchema, EcsReadonlyFacade, System } from '@/kernel/ecs/ecs.types'
 import type EventBus from '@/helpers/event-bus/event-bus'
 import { defaultEmitStreams } from '@/helpers/event-bus/event-bus'
+import { DefaultLogger } from '@/helpers/logger/logger'
+import type { Logger } from '@/helpers/logger/logger.types'
+import type {
+  Entity,
+  EngineComponentSchema,
+  EcsReadonlyFacade,
+  System,
+} from '@/kernel/ecs/ecs.types'
+import deepFreeze from '@/utilities/deepFreeze/deepFreeze'
 export default class ECS<
-  ComponentSchema extends EngineComponentSchema & Record<string, any> = EngineComponentSchema
+  ComponentSchema extends EngineComponentSchema & Record<string, any> = EngineComponentSchema,
 > {
   #nextEntityId = 1
   #activeEntities = new Set<number>()
@@ -20,6 +24,7 @@ export default class ECS<
   #logger: Logger
   #emitter: EventBus
   #defaultSystemPriority: number
+  #readonlyFacade: EcsReadonlyFacade<ComponentSchema> | undefined
 
   constructor(emitter: EventBus, logger?: Logger, defaultSystemPriority = 50) {
     this.#logger = logger ?? new DefaultLogger()
@@ -28,7 +33,8 @@ export default class ECS<
     // Bootstrap the required system components
     this.#components.set('Tags', new Map())
     this.#components.set('Meta', new Map())
-    this.#logger.debug('ECS initialized with built-in Tags and Meta components')
+    this.#components.set('Noun', new Map())
+    this.#logger.debug('ECS initialized with built-in Tags, Meta, and Noun components')
 
     this.#defaultSystemPriority = defaultSystemPriority
   }
@@ -43,6 +49,26 @@ export default class ECS<
           (a.priority ?? this.#defaultSystemPriority) - (b.priority ?? this.#defaultSystemPriority),
       ),
     )
+  }
+
+  get readonlyFacade(): EcsReadonlyFacade<ComponentSchema> {
+    if (!this.#readonlyFacade) {
+      this.#logger.debug('Creating readonly facade')
+      this.#readonlyFacade = deepFreeze({
+        entityExists: this.entityExists.bind(this),
+        entityHasTag: this.entityHasTag.bind(this),
+        entityHasComponent: this.entityHasComponent.bind(this),
+        getEntitiesByComponents: this.getEntitiesByComponents.bind(this),
+        getComponentsOnEntity: this.getComponentsOnEntity.bind(this),
+        getEntityComponentData: this.getEntityComponentData.bind(this),
+        getEntityByPrettyId: this.getEntityByPrettyId.bind(this),
+        getActiveEntities: this.getEntityList.bind(this),
+        getNounOnEntity: this.getNounOnEntity.bind(this),
+        getEntitiesByNoun: this.getEntitiesByNoun.bind(this),
+      })
+    }
+
+    return this.#readonlyFacade
   }
 
   #assertEntityExists(entity: Entity, entityOperation: string) {
@@ -75,7 +101,7 @@ export default class ECS<
     return name
   }
 
-  createEntity(metaId?: string) {
+  createEntity(metaId?: string, noun?: string) {
     if (metaId && this.#prettyIdMap.has(metaId)) {
       const err = `Cannot register new entity with pretty ID ${metaId}; entity ${this.#prettyIdMap.get(metaId)} is already assigned that ID`
       this.#logger.errorAndThrow(err)
@@ -94,6 +120,11 @@ export default class ECS<
       created: Date.now(),
     })
     this.#prettyIdMap.set(metaIdToSet, id)
+
+    if (noun) {
+      this.setComponentOnEntity(id, 'Noun', { noun })
+      this.#logger.debug(`Set noun ${noun} on entity ${id}`)
+    }
 
     this.#logger.info(`Entity ${id} created (metaId: "${metaIdToSet}")`)
 
@@ -198,7 +229,10 @@ export default class ECS<
     }
 
     store.delete(entity)
-    this.#emitter.emit(defaultEmitStreams.ecsComponentModified, { entity, component: componentType })
+    this.#emitter.emit(defaultEmitStreams.ecsComponentModified, {
+      entity,
+      component: componentType,
+    })
     this.#logger.debug(`Removed component "${componentType}" from entity ${entity}`)
   }
 
@@ -238,13 +272,13 @@ export default class ECS<
     return result
   }
 
-  getComponentsOnEntity(
-    entity: Entity,
-  ): Set<(keyof ComponentSchema & string)> {
+  getComponentsOnEntity(entity: Entity): Set<keyof ComponentSchema & string> {
     this.#assertEntityExists(entity, 'get components on')
 
     const components = Array.from(this.#components).flatMap(([componentName]) =>
-      this.entityHasComponent(entity, componentName as keyof ComponentSchema & string) ? [componentName as keyof ComponentSchema & string] : [],
+      this.entityHasComponent(entity, componentName as keyof ComponentSchema & string)
+        ? [componentName as keyof ComponentSchema & string]
+        : [],
     )
     this.#logger.debug(`Components on entity ${entity}: [${components.join(', ')}]`)
     return new Set(components)
@@ -315,6 +349,48 @@ export default class ECS<
     this.#logger.info(`Entity ${entity} destroyed`)
   }
 
+  setNounOnEntity(entity: Entity, noun: string) {
+    this.#assertEntityExists(entity, 'set noun on')
+
+    this.setComponentOnEntity(entity, 'Noun', { noun })
+    this.#logger.info(`Set noun ${noun} on entity ${entity}`)
+  }
+
+  removeNounFromEntity(entity: Entity) {
+    this.#assertEntityExists(entity, 'remove noun from')
+
+    this.removeComponentFromEntity(entity, 'Noun')
+    this.#logger.info(`Removed Noun component from entity ${entity}`)
+  }
+
+  getNounOnEntity(entity: Entity): string | null {
+    this.#assertEntityExists(entity, 'get noun on')
+
+    const components = this.getComponentsOnEntity(entity)
+
+    if (components.has('Noun')) {
+      const noun = this.getEntityComponentData(entity, 'Noun').noun
+      this.#logger.debug(`Retrieved noun for entity ${entity}: ${noun}`)
+      return noun
+    }
+
+    this.#logger.warn(
+      `Attempted to retrieve noun for entity ${entity}, but entity does not have Noun component`,
+    )
+    return null
+  }
+
+  getEntitiesByNoun(noun: string): Set<Entity> {
+    const entitiesWithNounComponent = this.getEntitiesByComponents('Noun')
+    const result: Entity[] = []
+    for (const entity of entitiesWithNounComponent) {
+      if (this.getEntityComponentData(entity, 'Noun').noun === noun) {
+        result.push(entity)
+      }
+    }
+    return new Set(result)
+  }
+
   addTagToEntity(entity: Entity, tag: string) {
     this.#assertEntityExists(entity, 'add tag to')
 
@@ -323,13 +399,10 @@ export default class ECS<
 
     if (tagData) {
       tagData.list.add(tag)
-      this.#emitter.emit(
-        defaultEmitStreams.ecsComponentModified,
-        {
-          entity,
-          component: 'Tags',
-        }
-      )
+      this.#emitter.emit(defaultEmitStreams.ecsComponentModified, {
+        entity,
+        component: 'Tags',
+      })
       this.#logger.debug(`Added tag "${tag}" to entity ${entity}`)
     }
   }
@@ -357,19 +430,5 @@ export default class ECS<
 
   getEntityList() {
     return structuredClone(this.#activeEntities)
-  }
-
-  getReadonlyFacade(): EcsReadonlyFacade<ComponentSchema> {
-    this.#logger.debug('Creating readonly facade')
-    return {
-      entityExists: this.entityExists.bind(this),
-      entityHasTag: this.entityHasTag.bind(this),
-      entityHasComponent: this.entityHasComponent.bind(this),
-      getEntitiesByComponents: this.getEntitiesByComponents.bind(this),
-      getComponentsOnEntity: this.getComponentsOnEntity.bind(this),
-      getEntityComponentData: this.getEntityComponentData.bind(this),
-      getEntityByPrettyId: this.getEntityByPrettyId.bind(this),
-      getActiveEntities: this.getEntityList.bind(this)
-    }
   }
 }
