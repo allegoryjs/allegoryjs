@@ -12,9 +12,9 @@ import {
   type ClassifiedNer,
   type ClassifiedNerTarget,
   type IntentClassifierConfig,
-} from '@/kernel/intent-classifier/intent-classifier.types'
+} from '@/nlp/intent-classifier/intent-classifier.types'
 import type { Intent } from '@/kernel/intent-pipeline/intent-pipeline.types'
-import { splitRawCommands } from '@/nlp/language-profile/profiles/profile-en-us'
+import { splitRawCommands } from '@/nlp/language-profile/en-us/profile-en-us'
 
 const DEFAULT_CONFIDENCE_THRESHOLD = 0.8
 const thresholdIsValid = (threshold: number | undefined) =>
@@ -101,6 +101,7 @@ export class IntentClassifier {
 
   async #classifyAction(command: string): Promise<ClassifiedAction> {
     this.#assertReady()
+
     const classifier = await this.#actionPipeline!(command, { top_k: 1 })
     const { label, score } = classifier[0]! // the pipeline is configured to always output 1 result (`top_k: 1` above)
 
@@ -113,7 +114,6 @@ export class IntentClassifier {
   async #classifyNer(command: string): Promise<ClassifiedNer> {
     this.#assertReady()
 
-    // eztodo err handling
     const tokens = await this.#nerPipeline!(command, { aggregation_strategy: 'simple' })
 
     const targets: ClassifiedNerTarget[] = []
@@ -138,7 +138,8 @@ export class IntentClassifier {
     }
   }
 
-  async #matchEntities() {
+  async #matchEntities(subject: string): Promise<Set<Entity>> {
     this.#assertReady()
+    
   }
 }

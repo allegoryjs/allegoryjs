@@ -22,7 +22,7 @@ import type {
   MutationOp,
 } from '@/kernel/intent-pipeline/intent-pipeline.types'
 
-import type { IntentClassificationModule } from '../intent-classifier/intent-classifier.types'
+import type { IntentClassificationModule } from '../../nlp/intent-classifier/intent-classifier.types'
 
 /**
  * @class IntentPipeline

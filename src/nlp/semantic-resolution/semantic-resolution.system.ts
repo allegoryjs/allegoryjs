@@ -3,7 +3,7 @@ import type EventBus from '@/helpers/event-bus/event-bus'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type { EngineComponentSchema, Entity, EcsReadonlyFacade } from '@/kernel/ecs/ecs.types'
-import type { DescriptorCacheEntry } from '@/kernel/semantic-resolution/semantic-resolution.types'
+import type { DescriptorCacheEntry } from '@/nlp/semantic-resolution/semantic-resolution.types'
 
 const DESCRIPTOR_DELIMITER = ';;'
 
@@ -119,7 +119,7 @@ class SemanticResolutionSystem<
 
   getEntityDescriptor(entity: Entity) {
     if (!this.#ecs.entityExists(entity)) {
-      const err = `Attempting to get descriptor for entity ${entity}, but no such entity exists`
+      const err = `Attempted to get descriptor for entity ${entity}, but no such entity exists`
       this.#logger.errorAndThrow(err)
     }
 
@@ -127,11 +127,11 @@ class SemanticResolutionSystem<
 
     if (!descriptorCache) {
       this.#logger.warn(`
-                Attempting to get descriptor, but no descriptor cache exists for entity ${entity}.
-                You can call rebuildCache to rectify this, but the cache should be getting built automatically.
-                You should verify that the ECS and semantic resolver are communicating properly through the event bus.
-                Aborting.
-            `)
+          Attempted to get descriptor, but no descriptor cache exists for entity ${entity}.
+          You can call rebuildCache to rectify this, but the cache should be getting built automatically.
+          You should verify that the ECS and semantic resolver are communicating properly through the event bus.
+          Aborting.
+      `)
       return
     }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { splitRawCommands } from '@/nlp/language-profile/profiles/profile-en-us'
+import { splitRawCommands } from '@/nlp/language-profile/en-us/profile-en-us'
 
 describe('profile-en-us', () => {
   describe('splitRawCommands', () => {
