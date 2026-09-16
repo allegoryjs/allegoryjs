@@ -1,4 +1,8 @@
-import type { IntentClassificationResponse } from '@/kernel/intent-pipeline/intent-pipeline.types'
+import type EventBus from '@/helpers/event-bus/event-bus'
+import type { Logger } from '@/helpers/logger/logger.types'
+import type ECS from '@/kernel/ecs/ecs'
+import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
+import type { SemanticResolutionSystem } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.system'
 
 export const ENTITY_GROUP_TARGET = 'TARGET'
 export const ENTITY_GROUP_AUX = 'AUXILIARY'
@@ -6,6 +10,15 @@ export const ENTITY_GROUP_AUX = 'AUXILIARY'
 // the standard classification used by the text classification pipeline which indicates
 // the user entered text that doesn't map cleanly onto a known Intent
 export const ACTION_NAME_UNKNOWN = 'UNKNOWN'
+
+export interface IntentClassifierParams<ComponentSchema extends EngineComponentSchema> {
+  config: IntentClassifierConfig
+  eventBus: EventBus
+  ecs: ECS<ComponentSchema>
+
+  semanticResolutionSystem?: SemanticResolutionSystem<ComponentSchema>
+  logger?: Logger
+}
 
 // the intermediate representation of objects in user commands coming
 // from the NER-classification model

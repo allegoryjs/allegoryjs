@@ -167,6 +167,15 @@ describe('setComponentOnEntity', () => {
     }).toThrow('unknown component type: undefinedComponent')
   })
 
+  test('throws when setting system components directly', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+
+    expect(() => ecs.setComponentOnEntity(e, 'Tags', { list: [] })).toThrow()
+    expect(() => ecs.setComponentOnEntity(e, 'Meta', { name: 't', id: 't', created: 0 })).toThrow()
+    expect(() => ecs.setComponentOnEntity(e, 'Noun', { noun: 'test' })).toThrow()
+  })
+
   test('throws for non-existent entity', () => {
     const ecs = makeECS()
     ecs.defineComponent('position')
@@ -246,6 +255,17 @@ describe('updateComponentData', () => {
     expect((data.a as any).b).toBeUndefined()
   })
 
+  test('throws when updating system components directly', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+
+    expect(() => ecs.updateComponentData(e, 'Tags', { list: [] })).toThrow()
+    expect(() => ecs.updateComponentData(e, 'Meta', { name: 't' })).toThrow()
+
+    ecs.setNounOnEntity(e, 'noun')
+    expect(() => ecs.updateComponentData(e, 'Noun', { noun: 'test2' })).toThrow()
+  })
+
   test('throws for unknown component type', () => {
     const ecs = makeECS()
     const e = ecs.createEntity()
@@ -300,6 +320,17 @@ describe('removeComponentFromEntity', () => {
     expect(ecs.entityHasComponent(e, 'position')).toBe(true)
     ecs.removeComponentFromEntity(e, 'position')
     expect(ecs.entityHasComponent(e, 'position')).toBe(false)
+  })
+
+  test('throws when removing system components directly', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+
+    expect(() => ecs.removeComponentFromEntity(e, 'Tags')).toThrow()
+    expect(() => ecs.removeComponentFromEntity(e, 'Meta')).toThrow()
+
+    ecs.setNounOnEntity(e, 'noun')
+    expect(() => ecs.removeComponentFromEntity(e, 'Noun')).toThrow()
   })
 
   test('throws for unknown component type', () => {
@@ -652,6 +683,35 @@ describe('addTagToEntity / entityHasTag', () => {
     ecs.addTagToEntity(e, 'test')
     ecs.destroyEntity(e)
     expect(() => ecs.entityHasTag(e, 'test')).toThrow()
+  })
+})
+
+describe('removeTagFromEntity', () => {
+  test('removes an existing tag', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+    ecs.addTagToEntity(e, 'player')
+    expect(ecs.entityHasTag(e, 'player')).toBe(true)
+
+    ecs.removeTagFromEntity(e, 'player')
+    expect(ecs.entityHasTag(e, 'player')).toBe(false)
+  })
+
+  test('does not throw when removing a tag that does not exist', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+
+    // Attempting to remove a non-existent tag should just warn/return, not throw an error
+    expect(() => ecs.removeTagFromEntity(e, 'non-existent-tag')).not.toThrow()
+    expect(ecs.entityHasTag(e, 'non-existent-tag')).toBe(false)
+  })
+
+  test('throws for destroyed entity', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+    ecs.addTagToEntity(e, 'test')
+    ecs.destroyEntity(e)
+    expect(() => ecs.removeTagFromEntity(e, 'test')).toThrow()
   })
 })
 
@@ -1010,5 +1070,107 @@ describe('multi-entity integration', () => {
     ecs.destroyEntity(entities[3]!)
     expect(Array.from(ecs.getEntitiesByComponents('position', 'label')).length).toBe(5)
     expect(Array.from(ecs.getEntitiesByComponents('position')).length).toBe(18)
+  })
+})
+
+// ─── Serialization (exportSerializedState & loadSerializedState) ────
+
+describe('State Serialization', () => {
+  const dummyMeta = {
+    gameId: 'test-game',
+    engineVersion: '1.0.0',
+    gameVersion: '1.0.0',
+    savedAt: 123456789,
+  }
+
+  test('exportSerializedState produces a valid JSON envelope', () => {
+    const ecs = makeECS()
+    ecs.defineComponent('position')
+
+    const e1 = ecs.createEntity('hero', 'player')
+    ecs.setComponentOnEntity(e1, 'position', { x: 10, y: 20 })
+
+    const jsonStr = ecs.exportSerializedState(dummyMeta)
+
+    // Should be valid JSON
+    const parsed = JSON.parse(jsonStr)
+
+    // Should contain the exact metadata
+    expect(parsed.metadata).toEqual(dummyMeta)
+
+    // Should contain the state
+    expect(parsed.state).toBeDefined()
+    expect(parsed.state[e1]).toBeDefined()
+
+    // Should contain the components for e1
+    expect(parsed.state[e1].position).toEqual({ x: 10, y: 20 })
+    expect(parsed.state[e1].Meta.id).toBe('hero')
+    expect(parsed.state[e1].Noun.noun).toBe('player')
+  })
+
+  test('exportSerializedState does not include destroyed entities', () => {
+    const ecs = makeECS()
+    ecs.defineComponent('position')
+
+    const e1 = ecs.createEntity()
+    ecs.setComponentOnEntity(e1, 'position', { x: 1, y: 1 })
+
+    const e2 = ecs.createEntity()
+    ecs.setComponentOnEntity(e2, 'position', { x: 2, y: 2 })
+
+    ecs.destroyEntity(e1)
+
+    const parsed = JSON.parse(ecs.exportSerializedState(dummyMeta))
+
+    expect(parsed.state[e1]).toBeUndefined()
+    expect(parsed.state[e2]).toBeDefined()
+  })
+
+  test('loadSerializedState throws if metadata validation fails', () => {
+    const ecs = makeECS()
+    const jsonStr = ecs.exportSerializedState(dummyMeta)
+
+    expect(() => {
+      ecs.loadSerializedState(jsonStr, (meta) => meta.gameId === 'wrong-game')
+    }).toThrow('invalid metadata')
+  })
+
+  test('loadSerializedState correctly hydrates a fresh ECS', () => {
+    // 1. Create and populate an ECS
+    const ecsA = makeECS()
+    ecsA.defineComponent('position')
+    const e1 = ecsA.createEntity('hero', 'player')
+    ecsA.setComponentOnEntity(e1, 'position', { x: 42, y: 99 })
+
+    const jsonStr = ecsA.exportSerializedState(dummyMeta)
+
+    // 2. Load it into a completely fresh ECS
+    const ecsB = makeECS()
+    ecsB.defineComponent('position')
+
+    ecsB.loadSerializedState(jsonStr, (meta) => meta.gameId === 'test-game')
+
+    // 3. Verify the state was perfectly restored
+    expect(ecsB.entityExists(e1)).toBe(true)
+    expect(ecsB.getEntityByPrettyId('hero')).toBe(e1)
+    expect(ecsB.getEntityComponentData(e1, 'position')).toEqual({ x: 42, y: 99 })
+    expect(ecsB.getNounOnEntity(e1)).toBe('player')
+  })
+
+  test('loadSerializedState restores the nextEntityId correctly', () => {
+    const ecsA = makeECS()
+    ecsA.createEntity() // id: 1
+    const e2 = ecsA.createEntity() // id: 2
+    ecsA.destroyEntity(e2)
+
+    const jsonStr = ecsA.exportSerializedState(dummyMeta)
+
+    const ecsB = makeECS()
+    ecsB.loadSerializedState(jsonStr, () => true)
+
+    // Since we don't serialize nextEntityId in the envelope, the engine recalculates it.
+    // The highest active ID in the save was 1, so the next ID will be 2.
+    const e3 = ecsB.createEntity()
+    expect(e3).toBe(2)
   })
 })

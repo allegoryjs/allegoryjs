@@ -5,6 +5,13 @@ import type {
 
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
+import type ECS from '@/kernel/ecs/ecs'
+import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
+import {
+  createSemanticResolutionSystem,
+  type SemanticResolutionSystem,
+} from '@/kernel/ecs/systems/semantic-cache/semantic-cache.system'
+import type { Intent } from '@/kernel/intent-pipeline/intent-pipeline.types'
 import {
   ENTITY_GROUP_AUX,
   ENTITY_GROUP_TARGET,
@@ -13,7 +20,7 @@ import {
   type ClassifiedNerTarget,
   type IntentClassifierConfig,
 } from '@/nlp/intent-classifier/intent-classifier.types'
-import type { Intent } from '@/kernel/intent-pipeline/intent-pipeline.types'
+import type { IntentClassifierParams } from '@/nlp/intent-classifier/intent-classifier.types'
 import { splitRawCommands } from '@/nlp/language-profile/en-us/profile-en-us'
 
 const DEFAULT_CONFIDENCE_THRESHOLD = 0.8
@@ -26,14 +33,22 @@ const thresholdIsValid = (threshold: number | undefined) =>
  * Responsible for coordinating the transformation of a raw player input into
  * a list of actionable Intents that the engine knows how to handle
  */
-export class IntentClassifier {
+export class IntentClassifier<ComponentSchema extends EngineComponentSchema> {
   #logger: Logger
   #initialized = false
   #config: IntentClassifierConfig
   #actionPipeline?: TextClassificationPipeline
   #nerPipeline?: TokenClassificationPipeline
+  #semanticResolutionSystem?: SemanticResolutionSystem<ComponentSchema>
+  #ecs?: ECS<ComponentSchema>
 
-  constructor(config: IntentClassifierConfig, logger?: DefaultLogger) {
+  constructor({
+    config,
+    logger,
+    semanticResolutionSystem,
+    ecs,
+    eventBus,
+  }: IntentClassifierParams<ComponentSchema>) {
     this.#logger = logger ?? new DefaultLogger()
 
     const thresholdProperties = [
@@ -54,6 +69,12 @@ export class IntentClassifier {
       nerModelConfidenceThreshold: DEFAULT_CONFIDENCE_THRESHOLD,
       ...config,
     }
+
+    this.#ecs = ecs
+
+    this.#semanticResolutionSystem =
+      semanticResolutionSystem ??
+      createSemanticResolutionSystem(ecs.readonlyFacade, eventBus, logger)
   }
 
   async initialize() {
@@ -140,6 +161,7 @@ export class IntentClassifier {
 
   async #matchEntities(subject: string): Promise<Set<Entity>> {
     this.#assertReady()
-    
+
+    this.#semanticResolutionSystem?.getEntityDescriptor()
   }
 }

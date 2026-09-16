@@ -20,11 +20,7 @@ function setup() {
   ecs.defineComponent('name')
   ecs.defineComponent('health')
 
-  const system = createSemanticResolutionSystem<TestSchema>(
-    ecs.readonlyFacade,
-    eventBus,
-    logger,
-  )
+  const system = createSemanticResolutionSystem<TestSchema>(ecs.readonlyFacade, eventBus, logger)
 
   return { logger, eventBus, ecs, system }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import deepFreeze from '@/utilities/deepFreeze/deepFreeze'
+import deepFreeze from '@/utilities/deep-freeze'
 
 // ─── Primitives ─────────────────────────────────────────────────────
 

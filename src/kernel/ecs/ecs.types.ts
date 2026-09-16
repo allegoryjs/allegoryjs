@@ -1,9 +1,24 @@
+import type { Logger } from '@/helpers/logger/logger.types'
+import type ECS from '@/kernel/ecs/ecs'
+import type { POJO } from '@/utilities/schemer/schemer.types'
+
 export type Entity = number
 
-export interface EngineComponentSchema {
+export const ENGINE_COMPONENT_SCHEMA_COMPONENTS = {
+  tags: 'Tags',
+  meta: 'Meta',
+  noun: 'Noun',
+} as const
+
+export const MANDATORY_COMPONENTS = [
+  ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags,
+  ENGINE_COMPONENT_SCHEMA_COMPONENTS.meta,
+] as const
+
+export interface EngineComponentSchema extends Record<string, POJO> {
   // all entities have this component
   Tags: {
-    list: Set<string>
+    list: Array<string>
   }
 
   // all entities have this component
@@ -25,7 +40,7 @@ export interface EngineComponentSchema {
 }
 
 export interface EcsReadonlyFacade<
-  ComponentSchema extends EngineComponentSchema & Record<string, any> = EngineComponentSchema,
+  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
 > {
   entityExists(entity: Entity): boolean
   entityHasTag(entity: Entity, tag: string): boolean
@@ -48,9 +63,72 @@ export interface EcsReadonlyFacade<
 }
 
 export interface System<
-  ComponentSchema extends EngineComponentSchema & Record<string, any> = EngineComponentSchema,
+  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
 > {
   readonly name: string
   readonly priority?: number
-  run(ecs: EcsReadonlyFacade<ComponentSchema>): Promise<void>
+
+  run(ecs: ECS<ComponentSchema>): Promise<void>
+
+  init?(ecs: ECS<ComponentSchema>): Promise<void>
+  shutdown?(ecs: ECS<ComponentSchema>): Promise<void>
+}
+
+export abstract class InitializableSystem<
+  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
+> implements System<ComponentSchema> {
+  abstract readonly name: string
+  abstract readonly priority?: number
+
+  private initialized = false
+
+  public async init(ecs: ECS<ComponentSchema>): Promise<void> {
+    if (this.initialized) {
+      this.logger.errorAndThrow(`Cannot initialize ${this.name} system; system already initialized`)
+    }
+
+    this.onInit(ecs)
+  }
+
+  public async dispose(ecs: ECS<ComponentSchema>): Promise<void> {
+    if (!this.initialized) {
+      this.logger.errorAndThrow(`Cannot dispose of ${this.name} system; system not initialized`)
+    }
+
+    this.onDispose(ecs)
+  }
+
+  public async run(ecs: ECS<ComponentSchema>): Promise<void> {
+    if (!this.initialized) {
+      this.logger.errorAndThrow(`Cannot run ${this.name} system; system not initialized`)
+    }
+
+    this.onRun(ecs)
+  }
+
+  protected abstract logger: Logger
+  protected abstract onInit(ecs: ECS<ComponentSchema>): Promise<void>
+  protected abstract onDispose(ecs: ECS<ComponentSchema>): Promise<void>
+  protected abstract onRun(ecs: ECS<ComponentSchema>): Promise<void>
+}
+
+
+export interface EcsState<
+  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
+> {
+  [entityId: number]: EngineComponentSchema & Partial<ComponentSchema>
+}
+
+export interface EcsStateEnvelopeMeta {
+  gameId: string
+  engineVersion: string
+  gameVersion: string
+  savedAt: number // ms from epoch
+}
+
+export interface EcsStateEnvelope<
+  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
+> {
+  metadata: EcsStateEnvelopeMeta,
+  state: EcsState<ComponentSchema>
 }
