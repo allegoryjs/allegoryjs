@@ -37,6 +37,13 @@ export interface EngineComponentSchema extends Record<string, POJO> {
   Noun: {
     noun: string // the main noun word/concept associated with the entity, e.g. "sword" or "potion bottle"
   }
+
+  SemanticCache: {
+    fullDescriptor: string
+    fullVector: number[]
+    chunks: [descriptor: string, vector: number[]][]
+    dirty: boolean // whether the entity needs to have its cache recalculated due to component data update
+  }
 }
 
 export interface EcsReadonlyFacade<
