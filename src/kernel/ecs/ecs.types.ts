@@ -43,7 +43,6 @@ export interface EcsReadonlyFacade<
   ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
 > {
   entityExists(entity: Entity): boolean
-  entityHasTag(entity: Entity, tag: string): boolean
   entityHasComponent<ComponentName extends keyof ComponentSchema & string>(
     entity: Entity,
     componentName: ComponentName,
@@ -58,8 +57,6 @@ export interface EcsReadonlyFacade<
     name: ComponentName,
   ): Readonly<ComponentSchema[ComponentName]>
   getActiveEntities(): Set<Entity>
-  getNounOnEntity(entity: Entity): string | null
-  getEntitiesByNoun(noun: string): Set<Entity>
 }
 
 export interface System<

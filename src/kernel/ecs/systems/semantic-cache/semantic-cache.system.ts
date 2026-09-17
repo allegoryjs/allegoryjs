@@ -78,7 +78,7 @@ export class SemanticCacheSystem<
 
     this.rebuildCache()
     this.#initialized = true
-    this.logger.info('Semantic Resolution System initialized; all listeners added')
+    this.logger.info('Semantic Cache System initialized; all listeners added')
   }
 
   async onDispose() {
@@ -91,7 +91,7 @@ export class SemanticCacheSystem<
 
     this.#eventBus.unsubscribe(defaultEmitStreams.ecsEntityDestroyed, this.#handleEntityDestroyed)
 
-    this.logger.info('Semantic Resolution System disposed; all listeners unbound')
+    this.logger.info('Semantic Cache System disposed; all listeners unbound')
   }
 
   registerResolver<K extends keyof ComponentSchema & string>(
@@ -181,11 +181,10 @@ export class SemanticCacheSystem<
 
     if (!resolver) {
       this.logger.debug(
-        `
-                Component modification event received, but no semantic resolver exists for component ${component}.
-                The state of this component will not be interpretable by the ML pipeline.
-                You should add a resolver using registerResolver if entities should be identifiable using data from this component.
-            `.trim(),
+        `Component modification event received, but no semantic resolver exists for component ${component}.
+         The state of this component will not be interpretable by the ML pipeline.
+         You should add a resolver using registerResolver if entities should be identifiable using data from this component.
+        `.trim(),
       )
 
       return

@@ -64,15 +64,12 @@ export default class ECS<
       this.#logger.debug('Creating readonly facade')
       this.#readonlyFacade = deepFreeze({
         entityExists: this.entityExists.bind(this),
-        entityHasTag: this.entityHasTag.bind(this),
         entityHasComponent: this.entityHasComponent.bind(this),
         getEntitiesByComponents: this.getEntitiesByComponents.bind(this),
         getComponentsOnEntity: this.getComponentsOnEntity.bind(this),
         getEntityComponentData: this.getEntityComponentData.bind(this),
         getEntityByPrettyId: this.getEntityByPrettyId.bind(this),
         getActiveEntities: this.getEntityList.bind(this),
-        getNounOnEntity: this.getNounOnEntity.bind(this),
-        getEntitiesByNoun: this.getEntitiesByNoun.bind(this),
       })
     }
 
@@ -182,8 +179,8 @@ export default class ECS<
 
     const metaIdToSet = metaId || `entity_${id}`
 
-    this.#setComponentOnEntityInternal(id, ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags, { list: Array.from({ length: 0 }) as Array<string> })
-    this.#setComponentOnEntityInternal(id, ENGINE_COMPONENT_SCHEMA_COMPONENTS.meta, {
+    this.setComponentOnEntity(id, ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags, { list: Array.from({ length: 0 }) as Array<string> })
+    this.setComponentOnEntity(id, ENGINE_COMPONENT_SCHEMA_COMPONENTS.meta, {
       name: `Entity_${id}`,
       id: metaIdToSet,
       created: Date.now(),
@@ -191,7 +188,7 @@ export default class ECS<
     this.#prettyIdMap.set(metaIdToSet, id)
 
     if (noun) {
-      this.#setComponentOnEntityInternal(id, ENGINE_COMPONENT_SCHEMA_COMPONENTS.noun, { noun })
+      this.setComponentOnEntity(id, ENGINE_COMPONENT_SCHEMA_COMPONENTS.noun, { noun })
       this.#logger.debug(`Set noun ${noun} on entity ${id}`)
     }
 
@@ -234,17 +231,9 @@ export default class ECS<
   ): void {
     const systemComponents: readonly string[] = Object.values(ENGINE_COMPONENT_SCHEMA_COMPONENTS)
     if (systemComponents.includes(name)) {
-      this.#logger.errorAndThrow(`Error setting component ${name} on entity ${entity}: cannot override system component data directly; use the provided helper methods`)
+      this.#logger.warn(`Setting component ${name} on entity ${entity}; component is a system component, and modifying its data may result in unexpected behavior.`)
     }
 
-    this.#setComponentOnEntityInternal(entity, name, data)
-  }
-
-  #setComponentOnEntityInternal<ComponentName extends keyof ComponentSchema & string>(
-    entity: Entity,
-    name: ComponentName,
-    data: ComponentSchema[ComponentName],
-  ): void {
     const store = this.#components.get(name)
 
     if (!store) {
@@ -262,6 +251,7 @@ export default class ECS<
     this.#emitter.emit(defaultEmitStreams.ecsComponentModified, { entity, component: name })
   }
 
+  // merge component data with new data
   updateComponentData<ComponentName extends keyof ComponentSchema & string>(
     entity: Entity,
     name: ComponentName,
@@ -269,18 +259,9 @@ export default class ECS<
   ) {
     const systemComponents: readonly string[] = Object.values(ENGINE_COMPONENT_SCHEMA_COMPONENTS)
     if (systemComponents.includes(name)) {
-      this.#logger.errorAndThrow(`Error updating data for component ${name} for entity ${entity}: cannot update system components directly; use the provided helper methods`)
+      this.#logger.warn(`Updating data for component ${name} for entity ${entity}: component is a system component, and modifying its data may result in unexpected behavior.`)
     }
 
-    this.#updateComponentDataInternal(entity, name, data)
-  }
-
-  // merge component data with new data
-  #updateComponentDataInternal<ComponentName extends keyof ComponentSchema & string>(
-    entity: Entity,
-    name: ComponentName,
-    data: Partial<ComponentSchema[ComponentName]>,
-  ) {
     this.#assertEntityExists(entity, 'update component data on')
 
     const store = this.#components.get(name)
@@ -315,16 +296,9 @@ export default class ECS<
   ) {
     const systemComponents: readonly string[] = Object.values(ENGINE_COMPONENT_SCHEMA_COMPONENTS)
     if (systemComponents.includes(componentType)) {
-      this.#logger.errorAndThrow(`Error removing component ${componentType} from entity ${entity}: cannot update system components directly; use the provided helper methods`)
+      this.#logger.warn(`Removing component ${componentType} from entity ${entity}: component is a system component, and modifying its data may result in unexpected behavior.`)
     }
 
-    this.#removeComponentFromEntityInternal(entity, componentType)
-  }
-
-  #removeComponentFromEntityInternal<ComponentName extends keyof ComponentSchema & string>(
-    entity: Entity,
-    componentType: ComponentName,
-  ) {
     this.#assertEntityExists(entity, 'remove component from')
 
     if ((MANDATORY_COMPONENTS as readonly string[]).includes(componentType)) {
@@ -457,111 +431,6 @@ export default class ECS<
     this.#prettyIdMap.delete(prettyId)
     this.#emitter.emit(defaultEmitStreams.ecsEntityDestroyed, entity)
     this.#logger.info(`Entity ${entity} destroyed`)
-  }
-
-  setNounOnEntity(entity: Entity, noun: string) {
-    this.#assertEntityExists(entity, 'set noun on')
-
-    this.#setComponentOnEntityInternal(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.noun, { noun })
-    this.#logger.info(`Set noun ${noun} on entity ${entity}`)
-  }
-
-  removeNounFromEntity(entity: Entity) {
-    this.#assertEntityExists(entity, 'remove noun from')
-
-    this.#removeComponentFromEntityInternal(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.noun)
-    this.#logger.info(`Removed Noun component from entity ${entity}`)
-  }
-
-  getNounOnEntity(entity: Entity): string | null {
-    this.#assertEntityExists(entity, 'get noun on')
-
-    const components = this.getComponentsOnEntity(entity)
-
-    if (components.has(ENGINE_COMPONENT_SCHEMA_COMPONENTS.noun)) {
-      const noun = this.getEntityComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.noun).noun
-      this.#logger.debug(`Retrieved noun for entity ${entity}: ${noun}`)
-      return noun
-    }
-
-    this.#logger.warn(
-      `Attempted to retrieve noun for entity ${entity}, but entity does not have Noun component`,
-    )
-    return null
-  }
-
-  getEntitiesByNoun(noun: string): Set<Entity> {
-    const entitiesWithNounComponent = this.getEntitiesByComponents(ENGINE_COMPONENT_SCHEMA_COMPONENTS.noun)
-    const result: Entity[] = []
-    for (const entity of entitiesWithNounComponent) {
-      if (this.getEntityComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.noun).noun === noun) {
-        result.push(entity)
-      }
-    }
-    return new Set(result)
-  }
-
-  addTagToEntity(entity: Entity, tag: string) {
-    this.#assertEntityExists(entity, 'add tag to')
-
-    const store = this.#components.get(ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags)
-    const tagData = store?.get(entity) as unknown as EngineComponentSchema['Tags'] | undefined
-
-    if (!tagData) {
-      this.#logger.errorAndThrow(`Attempted to access tags for entity ${entity}, but the Tags component is missing`)
-    }
-
-    const tagListHasTag = tagData.list.includes(tag)
-
-    if (tagListHasTag) {
-      this.#logger.warn(`Attempted to add tag ${tag} to entity ${entity}, but it already has that tag`)
-      return
-    }
-
-    if (!tagListHasTag) {
-      tagData.list.push(tag)
-      this.#emitter.emit(defaultEmitStreams.ecsComponentModified, {
-        entity,
-        component: ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags,
-      })
-      this.#logger.debug(`Added tag "${tag}" to entity ${entity}`)
-    }
-  }
-
-  removeTagFromEntity(entity: Entity, tag: string) {
-    this.#assertEntityExists(entity, 'remove tag from')
-
-    const store = this.#components.get(ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags)
-    const tagData = store?.get(entity) as unknown as EngineComponentSchema['Tags'] | undefined
-
-    if (!tagData) {
-      this.#logger.errorAndThrow(`Attempted to access tags for entity ${entity}, but the Tags component is missing`)
-    }
-
-    const tagListHasTag = tagData.list.includes(tag)
-
-    if (!tagListHasTag) {
-      this.#logger.warn(`Attempted to remove tag ${tag} from entity ${entity}, but it doesn't have that tag`)
-      return
-    }
-
-    if (tagListHasTag) {
-      tagData.list = tagData.list.filter(listTag => listTag !== tag)
-      this.#emitter.emit(defaultEmitStreams.ecsComponentModified, {
-        entity,
-        component: ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags,
-      })
-      this.#logger.debug(`Removed tag "${tag}" from entity ${entity}`)
-    }
-  }
-
-  entityHasTag(entity: Entity, tag: string) {
-    this.#assertEntityExists(entity, 'check for tags on')
-
-    const tagData = this.getEntityComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags)
-    const result = tagData?.list?.includes(tag) ?? false
-    this.#logger.debug(`entityHasTag(${entity}, "${tag}"): ${result}`)
-    return result
   }
 
   getEntityByPrettyId(id: string) {

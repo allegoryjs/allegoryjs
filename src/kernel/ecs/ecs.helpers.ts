@@ -40,10 +40,6 @@ function validateState<
     })
 }
 
-export function serializeState() {
-
-}
-
 export function parseStateJson<
     ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema
 >(stateString: string): EcsStateEnvelope<ComponentSchema> {

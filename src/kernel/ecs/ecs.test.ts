@@ -167,15 +167,6 @@ describe('setComponentOnEntity', () => {
     }).toThrow('unknown component type: undefinedComponent')
   })
 
-  test('throws when setting system components directly', () => {
-    const ecs = makeECS()
-    const e = ecs.createEntity()
-
-    expect(() => ecs.setComponentOnEntity(e, 'Tags', { list: [] })).toThrow()
-    expect(() => ecs.setComponentOnEntity(e, 'Meta', { name: 't', id: 't', created: 0 })).toThrow()
-    expect(() => ecs.setComponentOnEntity(e, 'Noun', { noun: 'test' })).toThrow()
-  })
-
   test('throws for non-existent entity', () => {
     const ecs = makeECS()
     ecs.defineComponent('position')
@@ -255,17 +246,6 @@ describe('updateComponentData', () => {
     expect((data.a as any).b).toBeUndefined()
   })
 
-  test('throws when updating system components directly', () => {
-    const ecs = makeECS()
-    const e = ecs.createEntity()
-
-    expect(() => ecs.updateComponentData(e, 'Tags', { list: [] })).toThrow()
-    expect(() => ecs.updateComponentData(e, 'Meta', { name: 't' })).toThrow()
-
-    ecs.setNounOnEntity(e, 'noun')
-    expect(() => ecs.updateComponentData(e, 'Noun', { noun: 'test2' })).toThrow()
-  })
-
   test('throws for unknown component type', () => {
     const ecs = makeECS()
     const e = ecs.createEntity()
@@ -320,17 +300,6 @@ describe('removeComponentFromEntity', () => {
     expect(ecs.entityHasComponent(e, 'position')).toBe(true)
     ecs.removeComponentFromEntity(e, 'position')
     expect(ecs.entityHasComponent(e, 'position')).toBe(false)
-  })
-
-  test('throws when removing system components directly', () => {
-    const ecs = makeECS()
-    const e = ecs.createEntity()
-
-    expect(() => ecs.removeComponentFromEntity(e, 'Tags')).toThrow()
-    expect(() => ecs.removeComponentFromEntity(e, 'Meta')).toThrow()
-
-    ecs.setNounOnEntity(e, 'noun')
-    expect(() => ecs.removeComponentFromEntity(e, 'Noun')).toThrow()
   })
 
   test('throws for unknown component type', () => {
@@ -644,118 +613,6 @@ describe('destroyEntity', () => {
   })
 })
 
-// ─── Tags ───────────────────────────────────────────────────────────
-
-describe('addTagToEntity / entityHasTag', () => {
-  test('adds and checks a tag', () => {
-    const ecs = makeECS()
-    const e = ecs.createEntity()
-    ecs.addTagToEntity(e, 'player')
-    expect(ecs.entityHasTag(e, 'player')).toBe(true)
-  })
-
-  test('returns false for tags not added', () => {
-    const ecs = makeECS()
-    const e = ecs.createEntity()
-    expect(ecs.entityHasTag(e, 'enemy')).toBe(false)
-  })
-
-  test('supports multiple tags on one entity', () => {
-    const ecs = makeECS()
-    const e = ecs.createEntity()
-    ecs.addTagToEntity(e, 'player')
-    ecs.addTagToEntity(e, 'alive')
-    expect(ecs.entityHasTag(e, 'player')).toBe(true)
-    expect(ecs.entityHasTag(e, 'alive')).toBe(true)
-  })
-
-  test('adding duplicate tag is idempotent', () => {
-    const ecs = makeECS()
-    const e = ecs.createEntity()
-    ecs.addTagToEntity(e, 'x')
-    ecs.addTagToEntity(e, 'x')
-    expect(ecs.entityHasTag(e, 'x')).toBe(true)
-  })
-
-  test('entityHasTag throws for destroyed entity', () => {
-    const ecs = makeECS()
-    const e = ecs.createEntity()
-    ecs.addTagToEntity(e, 'test')
-    ecs.destroyEntity(e)
-    expect(() => ecs.entityHasTag(e, 'test')).toThrow()
-  })
-})
-
-describe('removeTagFromEntity', () => {
-  test('removes an existing tag', () => {
-    const ecs = makeECS()
-    const e = ecs.createEntity()
-    ecs.addTagToEntity(e, 'player')
-    expect(ecs.entityHasTag(e, 'player')).toBe(true)
-
-    ecs.removeTagFromEntity(e, 'player')
-    expect(ecs.entityHasTag(e, 'player')).toBe(false)
-  })
-
-  test('does not throw when removing a tag that does not exist', () => {
-    const ecs = makeECS()
-    const e = ecs.createEntity()
-
-    // Attempting to remove a non-existent tag should just warn/return, not throw an error
-    expect(() => ecs.removeTagFromEntity(e, 'non-existent-tag')).not.toThrow()
-    expect(ecs.entityHasTag(e, 'non-existent-tag')).toBe(false)
-  })
-
-  test('throws for destroyed entity', () => {
-    const ecs = makeECS()
-    const e = ecs.createEntity()
-    ecs.addTagToEntity(e, 'test')
-    ecs.destroyEntity(e)
-    expect(() => ecs.removeTagFromEntity(e, 'test')).toThrow()
-  })
-})
-
-// ─── Noun ───────────────────────────────────────────────────────────
-
-describe('Noun', () => {
-  test('setNounOnEntity adds the Noun component', () => {
-    const ecs = makeECS()
-    const e = ecs.createEntity()
-    ecs.setNounOnEntity(e, 'sword')
-    expect(ecs.entityHasComponent(e, 'Noun')).toBe(true)
-    expect(ecs.getNounOnEntity(e)).toBe('sword')
-  })
-
-  test('removeNounFromEntity removes the Noun component', () => {
-    const ecs = makeECS()
-    const e = ecs.createEntity()
-    ecs.setNounOnEntity(e, 'shield')
-    expect(ecs.entityHasComponent(e, 'Noun')).toBe(true)
-    ecs.removeNounFromEntity(e)
-    expect(ecs.entityHasComponent(e, 'Noun')).toBe(false)
-    expect(ecs.getNounOnEntity(e)).toBeNull()
-  })
-
-  test('getEntitiesByNoun returns all entities with the given noun string', () => {
-    const ecs = makeECS()
-    const e1 = ecs.createEntity(undefined, 'apple')
-    const e2 = ecs.createEntity(undefined, 'orange')
-    const e3 = ecs.createEntity(undefined, 'apple')
-
-    const apples = ecs.getEntitiesByNoun('apple')
-    expect(apples.size).toBe(2)
-    expect(apples.has(e1)).toBe(true)
-    expect(apples.has(e3)).toBe(true)
-
-    const oranges = ecs.getEntitiesByNoun('orange')
-    expect(oranges.size).toBe(1)
-    expect(oranges.has(e2)).toBe(true)
-
-    const bananas = ecs.getEntitiesByNoun('banana')
-    expect(bananas.size).toBe(0)
-  })
-})
-
 // ─── entityExists ───────────────────────────────────────────────────
 
 describe('entityExists', () => {
@@ -800,13 +657,10 @@ describe('readonlyFacade', () => {
     const ecs = makeECS()
     const facade = ecs.readonlyFacade
     expect(typeof facade.entityExists).toBe('function')
-    expect(typeof facade.entityHasTag).toBe('function')
     expect(typeof facade.entityHasComponent).toBe('function')
     expect(typeof facade.getEntitiesByComponents).toBe('function')
     expect(typeof facade.getComponentsOnEntity).toBe('function')
     expect(typeof facade.getEntityComponentData).toBe('function')
-    expect(typeof facade.getNounOnEntity).toBe('function')
-    expect(typeof facade.getEntitiesByNoun).toBe('function')
   })
 
   test('facade methods work correctly', () => {
@@ -817,11 +671,9 @@ describe('readonlyFacade', () => {
       x: 5,
       y: 10,
     })
-    ecs.addTagToEntity(e, 'hero')
 
     const facade = ecs.readonlyFacade
     expect(facade.entityExists(e)).toBe(true)
-    expect(facade.entityHasTag(e, 'hero')).toBe(true)
     expect(facade.entityHasComponent(e, 'position')).toBe(true)
     expect(facade.getEntityComponentData(e, 'position')).toEqual({
       x: 5,
@@ -1154,7 +1006,7 @@ describe('State Serialization', () => {
     expect(ecsB.entityExists(e1)).toBe(true)
     expect(ecsB.getEntityByPrettyId('hero')).toBe(e1)
     expect(ecsB.getEntityComponentData(e1, 'position')).toEqual({ x: 42, y: 99 })
-    expect(ecsB.getNounOnEntity(e1)).toBe('player')
+    expect(ecsB.getEntityComponentData(e1, 'Noun')?.noun).toBe('player')
   })
 
   test('loadSerializedState restores the nextEntityId correctly', () => {
