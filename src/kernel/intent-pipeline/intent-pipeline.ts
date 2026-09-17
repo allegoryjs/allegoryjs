@@ -1,6 +1,6 @@
 import type EventBus from '@/helpers/event-bus/event-bus'
 import { defaultEmitStreams } from '@/helpers/event-bus/event-bus'
-import type { EngineEvent } from '@/helpers/event-bus/event-bus.types'
+import type { DefaultEventMap, EngineEvent } from '@/helpers/event-bus/event-bus.types'
 import type LocalizationModule from '@/helpers/localization/localization'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
@@ -35,8 +35,9 @@ import type { IntentClassificationModule } from '../../nlp/intent-classifier/int
  */
 export default class IntentPipeline<
   ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
+  EventMapType extends DefaultEventMap<ComponentSchema> = DefaultEventMap<ComponentSchema>
 > {
-  #emitter: EventBus
+  #emitter: EventBus<ComponentSchema, EventMapType>
   #config: IntentPipelineConfig
   #intentClassificationModule: IntentClassificationModule
   #t: (slug: string) => string
@@ -45,7 +46,7 @@ export default class IntentPipeline<
   #logger: Logger
 
   constructor(
-    emitter: EventBus,
+    emitter: EventBus<ComponentSchema, EventMapType>,
     ecs: ECS<ComponentSchema>,
     intentClassificationModule: IntentClassificationModule,
     localizationModule: LocalizationModule,

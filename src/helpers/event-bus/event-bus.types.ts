@@ -1,47 +1,36 @@
 import type { Logger } from '@/helpers/logger/logger.types'
+import type { EngineComponentSchema, Entity } from '@/kernel/ecs/ecs.types'
+import type { POJO } from '@/utilities/schemer/schemer.types'
 
-export type EventMap = Record<string, unknown>
+export type EventMapSchema = Record<string, any>
 
-export interface DefaultEventMap {
-  [key: string]: unknown
+export interface EcsComponentModifiedEventPayload<
+  ComponentSchema extends EngineComponentSchema & Record<string, POJO>
+> {
+  entity: Entity
+  component: keyof ComponentSchema & string
+}
+
+export interface DefaultEventMap<
+  ComponentSchema extends EngineComponentSchema & Record<string, POJO>
+> {
   narrate: string[]
+  ecsComponentModified: EcsComponentModifiedEventPayload<ComponentSchema>
+  ecsEntityCreated: Entity
+  ecsEntityDestroyed: Entity
+  semanticCacheUpdated: Entity
 }
 
-export interface EngineEvent {
-  type: string
-  payload?: unknown
-  timestamp?: number
-  source?: string
-  cancelable?: boolean
-}
-
-export interface EmitContext<P = unknown> {
-  type: string
-  payload: P
+export interface EngineEvent<P> {
   timestamp: number
-  cancelled: boolean
-
-  cancel(): void
+  payload: P
 }
 
-export interface SubscribeOptions {
-  priority?: number
-  once?: boolean
-}
-
-export type Listener<P = unknown> = (payload: P, ctx: EmitContext<P>) => void | Promise<void>
-
-export interface ListenerEntry {
-  callback: Listener<any>
-  priority: number
-  once: boolean
-}
+export type Listener<P> = (event: EngineEvent<P>) => void | Promise<void>
 
 export interface EventBusConfig {
-  maxListeners?: number
-  enableBuffering?: boolean
   logger?: Logger
-  onError?: (error: unknown, stream: string, listener: Listener<any>) => void
+  debug?: boolean
 }
 
 export type Disposer = () => void

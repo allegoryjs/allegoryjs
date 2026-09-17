@@ -15,10 +15,13 @@ import {
 } from '@/kernel/ecs/ecs.types'
 import deepFreeze from '@/utilities/deep-freeze'
 import type { POJO } from '@/utilities/schemer/schemer.types'
+import type { DefaultEventMap } from '@/helpers/event-bus/event-bus.types'
+
 import { parseStateJson } from './ecs.helpers'
 
 export default class ECS<
   ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
+  EventMapType extends DefaultEventMap<ComponentSchema> = DefaultEventMap<ComponentSchema>
 > {
   #nextEntityId = 1
   #activeEntities = new Set<number>()
@@ -30,11 +33,11 @@ export default class ECS<
 
   #systems = new Map<string, System<ComponentSchema>>()
   #logger: Logger
-  #emitter: EventBus
+  #emitter: EventBus<ComponentSchema, EventMapType>
   #defaultSystemPriority: number
   #readonlyFacade: EcsReadonlyFacade<ComponentSchema> | undefined
 
-  constructor(emitter: EventBus, logger?: Logger, defaultSystemPriority = 50) {
+  constructor(emitter: EventBus<ComponentSchema, EventMapType>, logger?: Logger, defaultSystemPriority = 50) {
     this.#logger = logger ?? new DefaultLogger()
     this.#emitter = emitter
 
