@@ -1,174 +1,201 @@
-import { describe, expect, test, spyOn } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 
-import EventBus, { defaultEmitStreams } from '@/helpers/event-bus/event-bus'
+import EventBus from '@/helpers/event-bus/event-bus'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import ECS from '@/kernel/ecs/ecs'
 import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
-import { createSemanticResolutionSystem } from '@/kernel/semantic-resolution/semantic-resolution.system'
+import { ENGINE_COMPONENT_SCHEMA_COMPONENTS } from '@/kernel/ecs/ecs.types'
+import { SemanticCacheSystem } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.system'
 
 interface TestSchema extends EngineComponentSchema {
   position: { x: number; y: number }
-  name: { text: string }
-  health: { hp: number }
+  name: { value: string }
 }
 
-function setup() {
-  const logger = new DefaultLogger({ info: false, debug: false, error: false, warn: false })
-  const eventBus = new EventBus()
-  const ecs = new ECS<TestSchema>(eventBus, logger)
-  ecs.defineComponent('position')
-  ecs.defineComponent('name')
-  ecs.defineComponent('health')
+describe('SemanticCacheSystem', () => {
+  function setup() {
+    const logger = new DefaultLogger({ info: false, debug: false, error: false, warn: false })
+    const eventBus = new EventBus<TestSchema>()
+    const ecs = new ECS<TestSchema>(eventBus, logger)
+    ecs.registerComponent('name')
+    ecs.registerComponent('position')
 
-  const system = createSemanticResolutionSystem<TestSchema>(ecs.readonlyFacade, eventBus, logger)
+    const vectorize = mock((_: string) => [1, 2, 3])
 
-  return { logger, eventBus, ecs, system }
-}
+    const system = new SemanticCacheSystem<TestSchema>({
+      ecs,
+      eventBus,
+      vectorize,
+      logger,
+    })
 
-describe('SemanticResolutionSystem', () => {
-  test('init sets up event bus listeners', () => {
-    const { eventBus, system } = setup()
-    system.init()
+    return { logger, eventBus, ecs, vectorize, system }
+  }
 
-    expect(eventBus.listenerCount(defaultEmitStreams.ecsEntityCreated)).toBeGreaterThan(0)
-    expect(eventBus.listenerCount(defaultEmitStreams.ecsEntityDestroyed)).toBeGreaterThan(0)
-    expect(eventBus.listenerCount(defaultEmitStreams.ecsComponentModified)).toBeGreaterThan(0)
-
-    system.dispose()
-  })
-
-  test('init handles being called multiple times', () => {
-    const { logger, system } = setup()
-    const warnSpy = spyOn(logger, 'warn')
-
-    system.init()
-    system.init()
-
-    expect(warnSpy).toHaveBeenCalledWith(
-      'Cannot initialize Semantic Resolution System: already initialized',
-    )
-
-    system.dispose()
-  })
-
-  test('dispose removes event bus listeners', () => {
-    const { eventBus, system } = setup()
-    system.init()
-    system.dispose()
-
-    expect(eventBus.listenerCount(defaultEmitStreams.ecsEntityCreated)).toBe(0)
-    expect(eventBus.listenerCount(defaultEmitStreams.ecsEntityDestroyed)).toBe(0)
-    expect(eventBus.listenerCount(defaultEmitStreams.ecsComponentModified)).toBe(0)
-  })
-
-  test('throws when getting descriptor for non-existent entity', () => {
+  test('name is SemanticCache', () => {
     const { system } = setup()
-    system.init()
-
-    expect(() => system.getEntityDescriptor(999)).toThrow()
-
-    system.dispose()
+    expect(system.name).toBe('SemanticCache')
   })
 
-  test('maintains cache when entities are created and destroyed', async () => {
+  test('onInit registers the semantic cache component', async () => {
     const { ecs, system } = setup()
-    system.init()
 
-    const entity = ecs.createEntity()
-    // Wait for event bus to process
-    await Bun.sleep(0)
+    await system.onInit()
 
-    expect(system.getEntityDescriptor(entity)).toEqual(
-      expect.objectContaining({ chunked: [], combined: '' }),
+    expect(ecs.isComponent(ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)).toBe(true)
+  })
+
+  test('onRun requires initialization', async () => {
+    const { system } = setup()
+    expect(system.onRun()).rejects.toThrow(
+      'Cannot run SemanticCache system; system not initialized',
     )
-    ecs.destroyEntity(entity)
-    await Bun.sleep(0)
-
-    expect(() => system.getEntityDescriptor(entity)).toThrow()
-
-    system.dispose()
   })
 
-  test('registerResolver and component modification updates descriptor', async () => {
+  test('onRun processes dirty semantic caches', async () => {
     const { ecs, system } = setup()
-    system.init()
-
-    system.registerResolver('name', (data) => `Name is ${data.text}`)
-    system.registerResolver('position', (data) => `At [${data.x}, ${data.y}]`)
+    await system.onInit()
 
     const entity = ecs.createEntity()
-    await Bun.sleep(0)
+    system.registerResolver('name', (data) => `Name is ${data.value}`)
 
-    ecs.setComponentOnEntity(entity, 'name', { text: 'Hero' })
-    await Bun.sleep(0)
+    // Modifying the component triggers #handleComponentModified which adds dirty cache
+    ecs.setComponentOnEntity(entity, 'name', { value: 'Run Test' })
 
-    let descriptor = system.getEntityDescriptor(entity)
-    expect(descriptor?.combined).toContain('Name is Hero')
-    expect(descriptor?.chunked.every((chunk) => chunk === 'Name is Hero')).toBeTrue()
+    await system.onRun()
 
-    ecs.setComponentOnEntity(entity, 'position', { x: 10, y: 20 })
-    await Bun.sleep(0)
-
-    descriptor = system.getEntityDescriptor(entity)
-    expect(descriptor?.combined).toContain('Name is Hero')
-    expect(descriptor?.combined).toContain('At [10, 20]')
-    expect(descriptor?.chunked.some((chunk) => chunk === 'Name is Hero')).toBeTrue()
-    expect(descriptor?.chunked.some((chunk) => chunk === 'At [10, 20]')).toBeTrue()
-
-    system.dispose()
+    const cacheData = ecs.getEntityComponentData(
+      entity,
+      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+    )
+    expect(cacheData.dirty).toBe(false)
+    expect(cacheData.fullDescriptor).toContain('Name is Run Test')
   })
 
-  test('deregisterResolver removes resolver and clears existing cache entries', async () => {
+  test('onDispose removes listeners and deregisters cache component', async () => {
     const { ecs, system } = setup()
-    system.init()
+    await system.onInit()
 
-    system.registerResolver('name', (data) => `Name is ${data.text}`)
+    expect(ecs.isComponent(ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)).toBe(true)
+
+    await system.onDispose()
+
+    expect(ecs.isComponent(ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)).toBe(false)
+  })
+
+  test('registerResolver and deregisterResolver work as expected', async () => {
+    const { system, ecs } = setup()
+    await system.onInit()
+
+    system.registerResolver('name', (data) => `Name is ${data.value}`)
 
     const entity = ecs.createEntity()
-    await Bun.sleep(0)
+    ecs.setComponentOnEntity(entity, 'name', { value: 'To deregister' })
 
-    ecs.setComponentOnEntity(entity, 'name', { text: 'Hero' })
-    await Bun.sleep(0)
-
-    expect(system.getEntityDescriptor(entity)?.combined).toContain('Name is Hero')
+    // #handleComponentModified automatically set it to dirty. Let's make it not dirty
+    ecs.updateComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+      dirty: false,
+    })
 
     system.deregisterResolver('name')
 
-    // Ensure cache entry for this component is removed
-    expect(system.getEntityDescriptor(entity)?.combined).not.toContain('Name is Hero')
-
-    system.dispose()
+    const cacheData = ecs.getEntityComponentData(
+      entity,
+      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+    )
+    expect(cacheData.dirty).toBe(true)
   })
 
-  test('rebuildCache recreates cache from existing ECS state', () => {
+  test('deregisterResolver gracefully handles unregistered resolvers', () => {
+    const { system } = setup()
+    // Should not throw
+    expect(() => {
+      system.deregisterResolver('name')
+    }).not.toThrow()
+  })
+
+  test('component modification triggers cache invalidation', async () => {
     const { ecs, system } = setup()
+    system.registerResolver('name', (data) => `Name is ${data.value}`)
+    await system.onInit()
 
-    // Setup ECS state *before* system is initialized
-    const entity1 = ecs.createEntity()
-    ecs.setComponentOnEntity(entity1, 'name', { text: 'Alice' })
+    const entity = ecs.createEntity()
 
-    const entity2 = ecs.createEntity()
-    ecs.setComponentOnEntity(entity2, 'name', { text: 'Bob' })
-    ecs.setComponentOnEntity(entity2, 'position', { x: 5, y: 5 })
+    ecs.setComponentOnEntity(entity, 'name', { value: 'New Name' })
 
-    system.registerResolver('name', (data) => `Name: ${data.text}`)
-    system.registerResolver('position', (data) => `Pos: ${data.x},${data.y}`)
+    expect(ecs.entityHasComponent(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)).toBe(
+      true,
+    )
+    const cacheData = ecs.getEntityComponentData(
+      entity,
+      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+    )
+    expect(cacheData.dirty).toBe(true)
 
-    system.init()
+    // Mark it not dirty to check if update makes it dirty again
+    ecs.updateComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+      dirty: false,
+    })
 
-    // Cache should be empty or warn since events were missed, but let's force rebuild
-    system.rebuildCache()
+    ecs.updateComponentData(entity, 'name', { value: 'Another Name' })
+    const cacheData2 = ecs.getEntityComponentData(
+      entity,
+      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+    )
+    expect(cacheData2.dirty).toBe(true)
+  })
 
-    const desc1 = system.getEntityDescriptor(entity1)
-    expect(desc1?.combined).toContain('Name: Alice')
-    expect(desc1?.chunked.every((chunk) => chunk === 'Name: Alice')).toBeTrue()
+  test('entities with cache component but no matching resolvers will have cache component removed', async () => {
+    const { ecs, system } = setup()
+    await system.onInit()
 
-    const desc2 = system.getEntityDescriptor(entity2)
-    expect(desc2?.combined).toContain('Name: Bob')
-    expect(desc2?.combined).toContain('Pos: 5,5')
-    expect(desc2?.chunked.some((chunk) => chunk === 'Name: Bob')).toBeTrue()
-    expect(desc2?.chunked.some((chunk) => chunk === 'Pos: 5,5')).toBeTrue()
+    const entity = ecs.createEntity()
+    ecs.setComponentOnEntity(entity, 'name', { value: 'Missing Resolver' })
 
-    system.dispose()
+    // Explicitly add the semantic cache component, pretending we want to build it
+    ecs.setComponentOnEntity(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+      dirty: true,
+      fullDescriptor: '',
+      chunks: [],
+      fullVector: [],
+    })
+
+    await system.onRun()
+
+    expect(ecs.entityHasComponent(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)).toBe(
+      false,
+    )
+  })
+
+  test('buildCache throws error if entity does not exist', async () => {
+    const { ecs, system } = setup()
+    await system.onInit()
+
+    const entity = ecs.createEntity()
+    ecs.setComponentOnEntity(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+      dirty: true,
+      fullDescriptor: '',
+      chunks: [],
+      fullVector: [],
+    })
+
+    ecs.destroyEntity(entity)
+
+    // Hack getEntitiesByComponents to return the destroyed entity
+    const activeEntitiesSpy = mock(() => new Set([entity]))
+    ecs.getEntitiesByComponents = activeEntitiesSpy as any
+
+    // Mock getEntityComponentData to return dirty: true so it proceeds to #buildCacheForEntity
+    const originalGetEntityComponentData = ecs.getEntityComponentData.bind(ecs)
+    ecs.getEntityComponentData = mock((e: any, c: any) => {
+      if (e === entity && c === ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache) {
+        return { dirty: true }
+      }
+      return originalGetEntityComponentData(e, c)
+    }) as any
+
+    expect(system.onRun()).rejects.toThrow(
+      `Attempted to build semantic cache for entity ${entity}, but no such entity exists`,
+    )
   })
 })

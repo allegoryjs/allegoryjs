@@ -46,8 +46,9 @@ export function isPojo(thing: unknown): thing is POJO {
     thing !== null &&
     !Array.isArray(thing) &&
     Reflect.ownKeys(thing).every(
-      (k) => typeof k === 'string' && isPojoValue((thing as Record<string | symbol, unknown>)[k as string | symbol])
+      (k) =>
+        typeof k === 'string' &&
+        isPojoValue((thing as Record<string | symbol, unknown>)[k as string | symbol]),
     )
   )
 }
-

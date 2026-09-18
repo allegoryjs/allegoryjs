@@ -1,13 +1,17 @@
 import { defaultEmitStreams } from '@/helpers/event-bus/event-bus'
 import type EventBus from '@/helpers/event-bus/event-bus'
+import type {
+  DefaultEventMap,
+  EcsComponentModifiedEventPayload,
+  EngineEvent,
+} from '@/helpers/event-bus/event-bus.types'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
 import {
+  ENGINE_COMPONENT_SCHEMA_COMPONENTS,
   type EngineComponentSchema,
   type Entity,
-  type EcsReadonlyFacade,
-  type System,
   InitializableSystem,
 } from '@/kernel/ecs/ecs.types'
 import type {
@@ -18,7 +22,7 @@ import type { POJO } from '@/utilities/schemer/schemer.types'
 
 const DESCRIPTOR_DELIMITER = ';;'
 
-function buildDescriptor<ComponentSchema extends EngineComponentSchema & Record<string, POJO>>(
+function aggregateDescriptors<ComponentSchema extends EngineComponentSchema & Record<string, POJO>>(
   descriptors: Map<keyof ComponentSchema & string, string>,
 ): DescriptorCacheEntry {
   return {
@@ -32,13 +36,14 @@ function buildDescriptor<ComponentSchema extends EngineComponentSchema & Record<
 
 export class SemanticCacheSystem<
   ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
+  EventMapType extends DefaultEventMap<ComponentSchema> = DefaultEventMap<ComponentSchema>,
 > extends InitializableSystem<ComponentSchema> {
   #initialized = false
   #ecs: ECS<ComponentSchema>
-  #eventBus: EventBus
-  #descriptorCache: Map<Entity, Map<keyof ComponentSchema & string, string>>
+  #eventBus: EventBus<ComponentSchema, EventMapType>
   #resolvers: Map<keyof ComponentSchema & string, (componentData: any) => string>
-  #descriptorBuilder: (
+  #vectorize: (text: string) => number[]
+  #descriptorAggregator: (
     descriptors: Map<keyof ComponentSchema & string, string>,
   ) => DescriptorCacheEntry
   logger: Logger
@@ -46,17 +51,18 @@ export class SemanticCacheSystem<
   constructor({
     ecs,
     eventBus,
+    vectorize,
     logger,
-    resolvers,
-    customDescriptorBuilder,
-  }: SemanticCacheConfig<ComponentSchema>) {
+    customDescriptorAggregator,
+  }: SemanticCacheConfig<ComponentSchema, EventMapType>) {
     super()
     this.#ecs = ecs
     this.#eventBus = eventBus
+    this.#vectorize = vectorize
+
     this.logger = logger ?? new DefaultLogger()
-    this.#descriptorCache = new Map()
-    this.#resolvers = new Map()
-    this.#descriptorBuilder = customDescriptorBuilder ?? buildDescriptor<ComponentSchema>
+    this.#resolvers = new Map<keyof ComponentSchema & string, (componentData: any) => string>()
+    this.#descriptorAggregator = customDescriptorAggregator ?? aggregateDescriptors<ComponentSchema>
   }
 
   get name() {
@@ -67,16 +73,27 @@ export class SemanticCacheSystem<
     if (!this.#initialized) {
       this.logger.errorAndThrow(`Cannot run ${this.name} system; system not initialized`)
     }
+
+    const entitiesWithCache = this.#ecs.getEntitiesByComponents(
+      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+    )
+
+    entitiesWithCache.forEach((entity) => {
+      const { dirty } = this.#ecs.getEntityComponentData(
+        entity,
+        ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+      )
+
+      if (dirty) {
+        this.#buildCacheForEntity(entity)
+      }
+    })
   }
 
   async onInit() {
     this.#eventBus.subscribe(defaultEmitStreams.ecsComponentModified, this.#handleComponentModified)
-
-    this.#eventBus.subscribe(defaultEmitStreams.ecsEntityCreated, this.#handleEntityCreated)
-
-    this.#eventBus.subscribe(defaultEmitStreams.ecsEntityDestroyed, this.#handleEntityDestroyed)
-
-    this.rebuildCache()
+    this.#ecs.registerComponent(ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)
+    this.#buildCache()
     this.#initialized = true
     this.logger.info('Semantic Cache System initialized; all listeners added')
   }
@@ -87,11 +104,11 @@ export class SemanticCacheSystem<
       this.#handleComponentModified,
     )
 
-    this.#eventBus.unsubscribe(defaultEmitStreams.ecsEntityCreated, this.#handleEntityCreated)
+    this.#ecs.deregisterComponent(ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)
 
-    this.#eventBus.unsubscribe(defaultEmitStreams.ecsEntityDestroyed, this.#handleEntityDestroyed)
-
-    this.logger.info('Semantic Cache System disposed; all listeners unbound')
+    this.logger.info(
+      'Semantic Cache System disposed; all listeners unbound and cache component removed from all entities',
+    )
   }
 
   registerResolver<K extends keyof ComponentSchema & string>(
@@ -116,122 +133,123 @@ export class SemanticCacheSystem<
     }
 
     this.#resolvers.delete(componentName)
-    this.#descriptorCache.forEach((componentMap) => {
-      componentMap.delete(componentName)
-    })
 
-    this.logger.info(`Removed resolver for component ${componentName}`)
+    const entitiesWithCache = this.#ecs.getEntitiesByComponents(
+      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+    )
+
+    for (const entity of entitiesWithCache) {
+      this.#ecs.updateComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+        dirty: true,
+      })
+    }
+
+    this.logger.info(
+      `Removed resolver for component ${componentName}; all entities marked as requiring cache rebuild on next tick`,
+    )
   }
 
-  getEntityDescriptor(entity: Entity) {
+  #buildCacheForEntity(entity: Entity) {
     if (!this.#ecs.entityExists(entity)) {
-      const err = `Attempted to get descriptor for entity ${entity}, but no such entity exists`
+      const err = `Attempted to build semantic cache for entity ${entity}, but no such entity exists`
       this.logger.errorAndThrow(err)
     }
 
-    const descriptorCache = this.#descriptorCache.get(entity)
+    const componentDescriptors: Map<keyof ComponentSchema & string, string> = new Map()
 
-    if (!descriptorCache) {
-      this.logger.warn(`
-          Attempted to get descriptor, but no descriptor cache exists for entity ${entity}.
-          You can call rebuildCache to rectify this, but the cache should be getting built automatically.
-          You should verify that the ECS and semantic resolver are communicating properly through the event bus.
-          Aborting.
-      `)
+    const componentData = this.#ecs.getAllEntityComponentData(entity)
+
+    for (const [componentName, data] of Object.entries(componentData)) {
+      const resolver = this.#resolvers.get(componentName)
+      if (resolver) {
+        componentDescriptors.set(componentName, resolver(data))
+      }
+    }
+
+    if (componentDescriptors.size === 0) {
+      this.logger.info(
+        `
+        Attempted to build cache for entity ${entity}, but entity has no components which have corresponding resolvers.
+        Removing Semantic Cache component from entity, as the resulting descriptor cache would be empty
+      `.trim(),
+      )
+
+      this.#ecs.removeComponentFromEntity(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)
+
       return
     }
 
-    return this.#descriptorBuilder(descriptorCache)
+    const aggregated = this.#descriptorAggregator(componentDescriptors)
+    const chunks = aggregated.chunked.map(
+      (descriptor) => [descriptor, this.#vectorize(descriptor)] as [string, number[]],
+    )
+
+    this.#ecs.setComponentOnEntity(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+      dirty: false,
+      fullDescriptor: aggregated.combined,
+      fullVector: this.#vectorize(aggregated.combined),
+      chunks,
+    })
   }
 
-  rebuildCache() {
-    this.logger.debug('Rebuilding descriptor cache for all entities')
+  #buildCache() {
+    this.logger.debug('Rebuilding semantic caches for all entities')
 
-    this.#descriptorCache = Array.from(this.#ecs.getActiveEntities()).reduce((accOuter, entity) => {
-      const cache = Array.from(this.#ecs.getComponentsOnEntity(entity)).reduce(
-        (accInner, component) => {
-          const resolver = this.#resolvers.get(component)
+    const activeEntitiesWithCache = this.#ecs.getEntitiesByComponents(
+      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+    )
 
-          if (!resolver) {
-            this.logger.info(
-              `While rebuilding the descriptor cache, component ${component} was skipped because it has no resolver`,
-            )
-          } else {
-            const componentData = this.#ecs.getEntityComponentData(entity, component)
-            accInner.set(component, resolver(componentData))
-          }
-
-          return accInner
-        },
-        new Map<keyof ComponentSchema & string, string>(),
-      )
-
-      accOuter.set(entity, cache)
-      return accOuter
-    }, new Map<Entity, Map<keyof ComponentSchema & string, string>>())
-  }
-
-  #handleComponentModified = (payload: unknown) => {
-    const { entity, component } = payload as {
-      entity: Entity
-      component: keyof ComponentSchema & string
+    for (const entity of activeEntitiesWithCache) {
+      this.#buildCacheForEntity(entity)
     }
-    const componentData = this.#ecs.getEntityComponentData(entity, component)
+  }
+
+  #handleComponentModified = ({
+    payload: { entity, component },
+  }: EngineEvent<EcsComponentModifiedEventPayload<ComponentSchema>>) => {
+    if (component === ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache) {
+      this.logger.debug(
+        `Semantic Cache system detected change in Semantic Cache component data on entity ${entity}; returning`,
+      )
+      return
+    }
+
     const resolver = this.#resolvers.get(component)
 
     if (!resolver) {
       this.logger.debug(
-        `Component modification event received, but no semantic resolver exists for component ${component}.
-         The state of this component will not be interpretable by the ML pipeline.
-         You should add a resolver using registerResolver if entities should be identifiable using data from this component.
-        `.trim(),
+        `
+        Component modification handler triggered in Semantic Cache system, but no resolver exists for component ${component}; returning.
+      `.trim(),
       )
-
-      return
     }
 
-    const resolvedDescriptor = resolver(componentData)
-    const cacheEntry = this.#descriptorCache.get(entity)
-
-    if (!cacheEntry) {
-      this.logger.warn(
-        `Attempted to access nonexistent descriptor cache entry for entity ${entity}.
-         A new cache entry will be created for entity ${entity} -> component ${component}.
-         You should verify that the event bus is being invoked properly when ECS component data is modified.
-        `.trim(),
-      )
-      this.#descriptorCache.set(entity, new Map([[component, resolvedDescriptor]]))
-    } else {
-      cacheEntry.set(component, resolvedDescriptor)
-    }
-
-    this.logger.debug(
-      `Descriptor cache for entity ${entity} -> component ${component} set to "${resolvedDescriptor}"`,
+    const cacheExists = this.#ecs.entityHasComponent(
+      entity,
+      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
     )
-  }
 
-  #handleEntityCreated = (payload: unknown) => {
-    const entity = payload as Entity
-    if (this.#descriptorCache.get(entity)) {
-      this.logger.warn(
-        `Attempted to add entity ${entity} as a new entry in the descriptor cache, but an entry already exists for it. Aborting.`,
+    if (!cacheExists) {
+      this.logger.debug(
+        `
+        A semantic cache resolver exists for component ${component}, and entity ${entity} has that component,
+        but no cache entry exists for the entity. Marking entity for descriptor cache generation.
+      `.trim(),
       )
-      return
-    }
-
-    this.#descriptorCache.set(entity, new Map())
-  }
-
-  #handleEntityDestroyed = (payload: unknown) => {
-    const entity = payload as Entity
-    if (!this.#descriptorCache.get(entity)) {
-      this.logger.warn(
-        `Attempted to remove entity ${entity} from the descriptor cache, but there is no entry for it. Aborting.`,
+      this.#ecs.setComponentOnEntity(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+        dirty: true,
+      })
+    } else {
+      this.logger.debug(
+        `
+        A semantic cache resolver exists for component ${component}, entity ${entity} has that component,
+        and a cache entry exists for the entity. Marking entity for descriptor cache regeneration.
+      `.trim(),
       )
-      return
+      this.#ecs.updateComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+        dirty: true,
+      })
     }
-
-    this.#descriptorCache.delete(entity)
   }
 }
 

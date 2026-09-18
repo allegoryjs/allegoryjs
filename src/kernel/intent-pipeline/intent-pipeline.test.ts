@@ -510,15 +510,13 @@ describe('Intent Pipeline', () => {
       mockEcs.entityExists.mockImplementation(() => true)
       mockI18n.$t.mockImplementation((s: string) => s)
 
-      const emitDynamicSpy = spyOn(mockEventBus, 'emitDynamic')
-
       await ip.handleCommand('dry run test')
 
       // Mutations should NOT be called
       expect(mockEcs.destroyEntity).not.toHaveBeenCalled()
 
       // Events should NOT be emitted
-      expect(emitDynamicSpy).not.toHaveBeenCalled()
+      expect(emitSpy).not.toHaveBeenCalled()
 
       // Narrations SHOULD still be emitted
       expect(emitSpy).toHaveBeenCalledWith(defaultEmitStreams.narrate, ['Dry run narration'])
@@ -566,15 +564,13 @@ describe('Intent Pipeline', () => {
       mockEcs.entityExists.mockImplementation(() => true)
       mockI18n.$t.mockImplementation((s: string) => s)
 
-      const emitDynamicSpy = spyOn(mockEventBus, 'emitDynamic')
-
       await ip.handleCommand('normal run test')
 
       // Mutations SHOULD be called
       expect(mockEcs.destroyEntity).toHaveBeenCalledWith(99)
 
       // Events SHOULD be emitted
-      expect(emitDynamicSpy).toHaveBeenCalledWith('TEST_EVENT', { foo: 'bar' })
+      expect(emitSpy).toHaveBeenCalledWith('TEST_EVENT', { foo: 'bar' })
 
       // Narrations SHOULD be emitted
       expect(emitSpy).toHaveBeenCalledWith(defaultEmitStreams.narrate, ['Normal run narration'])
@@ -843,13 +839,12 @@ describe('Intent Pipeline', () => {
       ])
 
       mockI18n.$t.mockImplementation((s: string) => `translated:${s}`)
-      const emitDynamicSpy = spyOn(mockEventBus, 'emitDynamic')
 
       await ip.handleCommand('contribution test')
 
       expect(emitSpy).toHaveBeenCalledWith(defaultEmitStreams.narrate, ['translated:narration.1'])
       expect(emitSpy).toHaveBeenCalledWith(defaultEmitStreams.narrate, ['translated:narration.2'])
-      expect(emitDynamicSpy).toHaveBeenCalledWith('CUSTOM_EVENT', { data: 'test' })
+      expect(emitSpy).toHaveBeenCalledWith('CUSTOM_EVENT', { data: 'test' })
     })
   })
 

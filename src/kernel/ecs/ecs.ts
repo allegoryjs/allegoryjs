@@ -1,27 +1,25 @@
 import type EventBus from '@/helpers/event-bus/event-bus'
 import { defaultEmitStreams } from '@/helpers/event-bus/event-bus'
+import type { DefaultEventMap } from '@/helpers/event-bus/event-bus.types'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
+import { parseStateJson } from '@/kernel/ecs/ecs.helpers'
 import {
   type Entity,
   type EngineComponentSchema,
   type EcsReadonlyFacade,
   type System,
   ENGINE_COMPONENT_SCHEMA_COMPONENTS,
-  MANDATORY_COMPONENTS,
   type EcsStateEnvelopeMeta,
   type EcsStateEnvelope,
   type EcsState,
 } from '@/kernel/ecs/ecs.types'
 import deepFreeze from '@/utilities/deep-freeze'
 import type { POJO } from '@/utilities/schemer/schemer.types'
-import type { DefaultEventMap } from '@/helpers/event-bus/event-bus.types'
-
-import { parseStateJson } from './ecs.helpers'
 
 export default class ECS<
   ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
-  EventMapType extends DefaultEventMap<ComponentSchema> = DefaultEventMap<ComponentSchema>
+  EventMapType extends DefaultEventMap<ComponentSchema> = DefaultEventMap<ComponentSchema>,
 > {
   #nextEntityId = 1
   #activeEntities = new Set<number>()
@@ -33,13 +31,17 @@ export default class ECS<
 
   #systems = new Map<string, System<ComponentSchema>>()
   #logger: Logger
-  #emitter: EventBus<ComponentSchema, EventMapType>
+  #eventBus: EventBus<ComponentSchema, EventMapType>
   #defaultSystemPriority: number
   #readonlyFacade: EcsReadonlyFacade<ComponentSchema> | undefined
 
-  constructor(emitter: EventBus<ComponentSchema, EventMapType>, logger?: Logger, defaultSystemPriority = 50) {
+  constructor(
+    eventBus: EventBus<ComponentSchema, EventMapType>,
+    logger?: Logger,
+    defaultSystemPriority = 50,
+  ) {
     this.#logger = logger ?? new DefaultLogger()
-    this.#emitter = emitter
+    this.#eventBus = eventBus
 
     // Bootstrap the required system components
     this.#components.set(ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags, new Map())
@@ -72,7 +74,8 @@ export default class ECS<
         getComponentsOnEntity: this.getComponentsOnEntity.bind(this),
         getEntityComponentData: this.getEntityComponentData.bind(this),
         getEntityByPrettyId: this.getEntityByPrettyId.bind(this),
-        getActiveEntities: this.getEntityList.bind(this),
+        getActiveEntities: this.getActiveEntities.bind(this),
+        getAllEntityComponentData: this.getAllEntityComponentData.bind(this),
       })
     }
 
@@ -111,7 +114,8 @@ export default class ECS<
 
     for (const [entityString, entityComponents] of Object.entries(state)) {
       const entityId = Number(entityString)
-      const entityComponentsTyped = entityComponents as EngineComponentSchema & Partial<ComponentSchema>
+      const entityComponentsTyped = entityComponents as EngineComponentSchema &
+        Partial<ComponentSchema>
 
       activeEntities.push(entityId)
       if (nextEntityId <= entityId) nextEntityId = entityId + 1
@@ -128,13 +132,18 @@ export default class ECS<
     this.#activeEntities = new Set(activeEntities)
     this.#components = components
     this.#prettyIdMap = prettyIdMap
+
+    this.#logger.info('ECS successfully hydrated with serialized state')
   }
 
   exportSerializedState(metadata: EcsStateEnvelopeMeta): string {
     const state: Record<Entity, POJO> = {}
 
     for (const [componentName, entityMapUntyped] of this.#components.entries()) {
-      const entityMap = entityMapUntyped as Map<Entity, ComponentSchema[keyof ComponentSchema & string]>
+      const entityMap = entityMapUntyped as Map<
+        Entity,
+        ComponentSchema[keyof ComponentSchema & string]
+      >
 
       for (const [entity, componentData] of entityMap.entries()) {
         if (!state[entity]) {
@@ -158,16 +167,26 @@ export default class ECS<
     return result
   }
 
-  defineComponent(name: keyof ComponentSchema & string) {
+  registerComponent(name: keyof ComponentSchema & string) {
     if (this.#components.has(name)) {
-      const err = `Component named ${String(name)} already exists`
+      const err = `Error registering component ${String(name)}: a component by that name is already registered`
       this.#logger.errorAndThrow(err)
     }
 
     this.#components.set(name, new Map())
-    this.#logger.info(`Component "${name}" defined`)
+    this.#logger.info(`Component "${name}" registered`)
 
     return name
+  }
+
+  deregisterComponent(name: keyof ComponentSchema & string) {
+    if (!this.#components.has(name)) {
+      const err = `Error deregistering component ${name}: no component by that name is registered`
+      this.#logger.errorAndThrow(err)
+    }
+
+    this.#components.delete(name)
+    this.#logger.info(`Component "${name}" deregistered`)
   }
 
   createEntity(metaId?: string, noun?: string) {
@@ -182,7 +201,9 @@ export default class ECS<
 
     const metaIdToSet = metaId || `entity_${id}`
 
-    this.setComponentOnEntity(id, ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags, { list: Array.from({ length: 0 }) as Array<string> })
+    this.setComponentOnEntity(id, ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags, {
+      list: Array.from({ length: 0 }) as Array<string>,
+    })
     this.setComponentOnEntity(id, ENGINE_COMPONENT_SCHEMA_COMPONENTS.meta, {
       name: `Entity_${id}`,
       id: metaIdToSet,
@@ -196,8 +217,6 @@ export default class ECS<
     }
 
     this.#logger.info(`Entity ${id} created (metaId: "${metaIdToSet}")`)
-
-    this.#emitter.emit(defaultEmitStreams.ecsEntityCreated, id)
 
     return id
   }
@@ -234,7 +253,9 @@ export default class ECS<
   ): void {
     const systemComponents: readonly string[] = Object.values(ENGINE_COMPONENT_SCHEMA_COMPONENTS)
     if (systemComponents.includes(name)) {
-      this.#logger.warn(`Setting component ${name} on entity ${entity}; component is a system component, and modifying its data may result in unexpected behavior.`)
+      this.#logger.warn(
+        `Setting component ${name} on entity ${entity}; component is a system component, and modifying its data may result in unexpected behavior.`,
+      )
     }
 
     const store = this.#components.get(name)
@@ -246,12 +267,10 @@ export default class ECS<
 
     this.#assertEntityExists(entity, 'set component on')
 
-    store.set(entity, data)
-    this.#logger.debug(
-      `Set component "${name}" data on entity ${entity}: ${JSON.stringify(data)}`,
-    )
+    store.set(entity, structuredClone(data))
+    this.#logger.debug(`Set component "${name}" data on entity ${entity}: ${JSON.stringify(data)}`)
 
-    this.#emitter.emit(defaultEmitStreams.ecsComponentModified, { entity, component: name })
+    this.#eventBus.emit(defaultEmitStreams.ecsComponentModified, { entity, component: name })
   }
 
   // merge component data with new data
@@ -262,7 +281,9 @@ export default class ECS<
   ) {
     const systemComponents: readonly string[] = Object.values(ENGINE_COMPONENT_SCHEMA_COMPONENTS)
     if (systemComponents.includes(name)) {
-      this.#logger.warn(`Updating data for component ${name} for entity ${entity}: component is a system component, and modifying its data may result in unexpected behavior.`)
+      this.#logger.warn(
+        `Updating data for component ${name} for entity ${entity}: component is a system component, and modifying its data may result in unexpected behavior.`,
+      )
     }
 
     this.#assertEntityExists(entity, 'update component data on')
@@ -290,7 +311,7 @@ export default class ECS<
       ...data,
     })
 
-    this.#emitter.emit(defaultEmitStreams.ecsComponentModified, { entity, component: name })
+    this.#eventBus.emit(defaultEmitStreams.ecsComponentModified, { entity, component: name })
   }
 
   removeComponentFromEntity<ComponentName extends keyof ComponentSchema & string>(
@@ -299,14 +320,12 @@ export default class ECS<
   ) {
     const systemComponents: readonly string[] = Object.values(ENGINE_COMPONENT_SCHEMA_COMPONENTS)
     if (systemComponents.includes(componentType)) {
-      this.#logger.warn(`Removing component ${componentType} from entity ${entity}: component is a system component, and modifying its data may result in unexpected behavior.`)
+      this.#logger.warn(
+        `Removing component ${componentType} from entity ${entity}: component is a system component, and modifying its data may result in unexpected behavior.`,
+      )
     }
 
     this.#assertEntityExists(entity, 'remove component from')
-
-    if ((MANDATORY_COMPONENTS as readonly string[]).includes(componentType)) {
-      this.#logger.errorAndThrow(`Error removing component ${componentType} from entity ${entity}: component type is required by the engine`)
-    }
 
     const store = this.#components.get(componentType)
 
@@ -316,17 +335,35 @@ export default class ECS<
     }
 
     store.delete(entity)
-    this.#emitter.emit(defaultEmitStreams.ecsComponentModified, {
+    this.#eventBus.emit(defaultEmitStreams.ecsComponentModified, {
       entity,
       component: componentType,
     })
     this.#logger.debug(`Removed component "${componentType}" from entity ${entity}`)
   }
 
+  getAllEntityComponentData(entity: Entity): Partial<{
+    [ComponentName in keyof ComponentSchema & string]: ComponentSchema[ComponentName]
+  }> {
+    this.#assertEntityExists(entity, 'get component data for')
+
+    const data: Partial<{
+      [ComponentName in keyof ComponentSchema & string]: ComponentSchema[ComponentName]
+    }> = {}
+
+    const components = this.getComponentsOnEntity(entity)
+
+    components.forEach((component) => {
+      data[component] = this.getEntityComponentData(entity, component)
+    })
+
+    return data
+  }
+
   getEntityComponentData<ComponentName extends keyof ComponentSchema & string>(
     entity: Entity,
     name: ComponentName,
-  ): Readonly<ComponentSchema[ComponentName]> {
+  ): ComponentSchema[ComponentName] {
     this.#assertEntityExists(entity, 'get component data for')
 
     const store = this.#components.get(name)
@@ -339,7 +376,7 @@ export default class ECS<
 
     this.#logger.debug(`Retrieved component "${name}" data for entity ${entity}`)
 
-    return deepFreeze(componentData as ComponentSchema[ComponentName])
+    return structuredClone(componentData as ComponentSchema[ComponentName])
   }
 
   entityHasComponent<ComponentName extends keyof ComponentSchema & string>(
@@ -432,7 +469,6 @@ export default class ECS<
 
     this.#activeEntities.delete(entity)
     this.#prettyIdMap.delete(prettyId)
-    this.#emitter.emit(defaultEmitStreams.ecsEntityDestroyed, entity)
     this.#logger.info(`Entity ${entity} destroyed`)
   }
 
@@ -448,7 +484,7 @@ export default class ECS<
     return result
   }
 
-  getEntityList() {
+  getActiveEntities() {
     return structuredClone(this.#activeEntities)
   }
 }

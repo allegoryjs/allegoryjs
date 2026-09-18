@@ -20,7 +20,7 @@ describe('EventBus', () => {
 
   it('delivers typed payloads to subscribers', async () => {
     const received: unknown[] = []
-    
+
     emitter.subscribe('narrate', (event) => {
       received.push(event.payload)
       expect(event.timestamp).toBeDefined()
@@ -33,7 +33,7 @@ describe('EventBus', () => {
 
   it('delivers events to wildcard listeners', async () => {
     const received: unknown[] = []
-    
+
     emitter.subscribe(WILDCARD, (event) => {
       received.push(event.payload)
     })
@@ -45,10 +45,10 @@ describe('EventBus', () => {
 
   it('delivers events to namespace listeners', async () => {
     const received: unknown[] = []
-    
+
     emitter.subscribe('ecsComponentModified', () => {})
-    
-    // We cast to any just for testing namespaces since ecs:* isn't a literal key in the schema, 
+
+    // We cast to any just for testing namespaces since ecs:* isn't a literal key in the schema,
     // but the type signature allows `${string}:*`
     emitter.subscribe('ecs:*', (event) => {
       received.push(event.payload)
@@ -56,38 +56,45 @@ describe('EventBus', () => {
 
     await emitter.emit('ecsEntityCreated', 123)
   })
-  
+
   it('correctly matches colon-based namespaces', async () => {
-    const bus = new EventBus<EngineComponentSchema, DefaultEventMap<EngineComponentSchema> & { 'combat:damage': number }>()
+    const bus = new EventBus<
+      EngineComponentSchema,
+      DefaultEventMap<EngineComponentSchema> & { 'combat:damage': number }
+    >()
     const received: number[] = []
-    
+
     bus.subscribe('combat:*', (event) => {
       received.push(event.payload)
     })
-    
+
     await bus.emit('combat:damage', 50)
     expect(received).toEqual([50])
   })
 
   it('unsubscribes correctly', async () => {
     let count = 0
-    const dispose = emitter.subscribe('narrate', () => { count++ })
-    
+    const dispose = emitter.subscribe('narrate', () => {
+      count++
+    })
+
     await emitter.emit('narrate', ['1'])
     dispose()
     await emitter.emit('narrate', ['2'])
-    
+
     expect(count).toBe(1)
   })
 
   it('clears correctly', async () => {
     let count = 0
-    emitter.subscribe('narrate', () => { count++ })
-    
+    emitter.subscribe('narrate', () => {
+      count++
+    })
+
     await emitter.emit('narrate', ['1'])
     emitter.clear()
     await emitter.emit('narrate', ['2'])
-    
+
     expect(count).toBe(1)
   })
 })

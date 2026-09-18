@@ -78,28 +78,47 @@ describe('createEntity', () => {
   })
 })
 
-// ─── defineComponent ────────────────────────────────────────────────
+// ─── registerComponent ────────────────────────────────────────────────
 
-describe('defineComponent', () => {
+describe('registerComponent', () => {
   test('returns the component name', () => {
     const ecs = makeECS()
-    expect(ecs.defineComponent('position')).toBe('position')
+    expect(ecs.registerComponent('position')).toBe('position')
   })
 
   test('throws when defining a component that already exists', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
-    expect(() => ecs.defineComponent('position')).toThrow('already exists')
+    ecs.registerComponent('position')
+    expect(() => ecs.registerComponent('position')).toThrow('already registered')
   })
 
   test('throws when redefining built-in Tags component', () => {
     const ecs = makeECS()
-    expect(() => ecs.defineComponent('Tags' as any)).toThrow('already exists')
+    expect(() => ecs.registerComponent('Tags' as any)).toThrow('already registered')
   })
 
   test('throws when redefining built-in Meta component', () => {
     const ecs = makeECS()
-    expect(() => ecs.defineComponent('Meta' as any)).toThrow('already exists')
+    expect(() => ecs.registerComponent('Meta' as any)).toThrow('already registered')
+  })
+})
+
+// ─── deregisterComponent ──────────────────────────────────────────────
+
+describe('deregisterComponent', () => {
+  test('removes an existing component', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    expect(ecs.isComponent('position')).toBe(true)
+    ecs.deregisterComponent('position')
+    expect(ecs.isComponent('position')).toBe(false)
+  })
+
+  test('throws when deregistering a non-existent component', () => {
+    const ecs = makeECS()
+    expect(() => ecs.deregisterComponent('position')).toThrow(
+      'no component by that name is registered',
+    )
   })
 })
 
@@ -108,7 +127,7 @@ describe('defineComponent', () => {
 describe('isComponent', () => {
   test('returns true for defined components', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     expect(ecs.isComponent('position')).toBe(true)
   })
 
@@ -129,7 +148,7 @@ describe('isComponent', () => {
 describe('setComponentOnEntity', () => {
   test('sets and retrieves component data', () => {
     const ecs = makeECS()
-    ecs.defineComponent('health')
+    ecs.registerComponent('health')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'health', {
       current: 100,
@@ -141,9 +160,34 @@ describe('setComponentOnEntity', () => {
     })
   })
 
+  test('component data is cloned, so later changes to the argument object does not affect the store', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('health')
+    const e = ecs.createEntity()
+
+    const data = {
+      current: 100,
+      max: 100,
+    }
+
+    ecs.setComponentOnEntity(e, 'health', data)
+    expect(ecs.getEntityComponentData(e, 'health')).toEqual({
+      current: 100,
+      max: 100,
+    })
+
+    data.current = 0
+    data.max = 200
+
+    expect(ecs.getEntityComponentData(e, 'health')).toEqual({
+      current: 100,
+      max: 100,
+    })
+  })
+
   test('overwrites existing component data', () => {
     const ecs = makeECS()
-    ecs.defineComponent('health')
+    ecs.registerComponent('health')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'health', {
       current: 100,
@@ -169,7 +213,7 @@ describe('setComponentOnEntity', () => {
 
   test('throws for non-existent entity', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     expect(() => {
       ecs.setComponentOnEntity(999, 'position', {
         x: 0,
@@ -180,7 +224,7 @@ describe('setComponentOnEntity', () => {
 
   test('throws for destroyed entity', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e = ecs.createEntity()
     ecs.destroyEntity(e)
     expect(() => {
@@ -197,7 +241,7 @@ describe('setComponentOnEntity', () => {
 describe('updateComponentData', () => {
   test('merges partial data into existing component', () => {
     const ecs = makeECS()
-    ecs.defineComponent('stats')
+    ecs.registerComponent('stats')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'stats', {
       strength: 10,
@@ -212,9 +256,34 @@ describe('updateComponentData', () => {
     })
   })
 
+  test("changes to the data argument object don't affect the store", () => {
+    const ecs = makeECS()
+    ecs.registerComponent('stats')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'stats', {
+      strength: 10,
+      intelligence: 8,
+      dexterity: 12,
+    })
+
+    const newData = { strength: 15 }
+    ecs.updateComponentData(e, 'stats', newData)
+    expect(ecs.getEntityComponentData(e, 'stats')).toEqual({
+      strength: 15,
+      intelligence: 8,
+      dexterity: 12,
+    })
+    newData.strength = 1_000
+    expect(ecs.getEntityComponentData(e, 'stats')).toEqual({
+      strength: 15,
+      intelligence: 8,
+      dexterity: 12,
+    })
+  })
+
   test('merges multiple fields at once', () => {
     const ecs = makeECS()
-    ecs.defineComponent('stats')
+    ecs.registerComponent('stats')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'stats', {
       strength: 10,
@@ -234,7 +303,7 @@ describe('updateComponentData', () => {
 
   test('demonstrates shallow merge behavior (nested objects are overwritten)', () => {
     const ecs = makeECS()
-    ecs.defineComponent('nested')
+    ecs.registerComponent('nested')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'nested', { a: { b: 1 } })
 
@@ -256,7 +325,7 @@ describe('updateComponentData', () => {
 
   test('throws for non-existent entity', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     expect(() => {
       ecs.updateComponentData(999, 'position', { x: 1 })
     }).toThrow('entity does not exist')
@@ -264,7 +333,7 @@ describe('updateComponentData', () => {
 
   test('throws for destroyed entity', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'position', {
       x: 0,
@@ -278,7 +347,7 @@ describe('updateComponentData', () => {
 
   test('throws when entity does not have the component', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e = ecs.createEntity()
     expect(() => {
       ecs.updateComponentData(e, 'position', { x: 5 })
@@ -291,7 +360,7 @@ describe('updateComponentData', () => {
 describe('removeComponentFromEntity', () => {
   test('removes a component from an entity', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'position', {
       x: 1,
@@ -312,7 +381,7 @@ describe('removeComponentFromEntity', () => {
 
   test('throws for non-existent entity', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     expect(() => {
       ecs.removeComponentFromEntity(999, 'position')
     }).toThrow('entity does not exist')
@@ -320,7 +389,7 @@ describe('removeComponentFromEntity', () => {
 
   test('throws for destroyed entity', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e = ecs.createEntity()
     ecs.destroyEntity(e)
     expect(() => {
@@ -332,31 +401,25 @@ describe('removeComponentFromEntity', () => {
 // ─── getEntityComponentData ─────────────────────────────────────────
 
 describe('getEntityComponentData', () => {
-  test('returns frozen (readonly) data', () => {
+  test('returns a clone of the component data', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'position', {
       x: 1,
       y: 2,
     })
     const data = ecs.getEntityComponentData(e, 'position')
-    expect(Object.isFrozen(data)).toBe(true)
-  })
-
-  test('returned data is deep-frozen', () => {
-    const ecs = makeECS()
-    ecs.defineComponent('nested')
-    const e = ecs.createEntity()
-    ecs.setComponentOnEntity(e, 'nested', { a: { b: 1 } })
-    const data = ecs.getEntityComponentData(e, 'nested')
-    expect(Object.isFrozen(data)).toBe(true)
-    expect(Object.isFrozen(data.a)).toBe(true)
+    expect(data).toEqual(expect.objectContaining({ x: 1, y: 2 }))
+    data.x = 999
+    expect(ecs.getEntityComponentData(e, 'position')).toEqual(
+      expect.objectContaining({ x: 1, y: 2 }),
+    )
   })
 
   test('returned data is a deep clone (mutations do not affect store)', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'position', {
       x: 1,
@@ -370,7 +433,7 @@ describe('getEntityComponentData', () => {
 
   test('throws when entity does not have the component', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e = ecs.createEntity()
     expect(() => {
       ecs.getEntityComponentData(e, 'position')
@@ -379,7 +442,7 @@ describe('getEntityComponentData', () => {
 
   test('throws for destroyed entity', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'position', {
       x: 0,
@@ -392,12 +455,69 @@ describe('getEntityComponentData', () => {
   })
 })
 
+// ─── getAllEntityComponentData ──────────────────────────────────────
+
+describe('getAllEntityComponentData', () => {
+  test('returns an object containing all components for the entity', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    ecs.registerComponent('health')
+
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 1, y: 2 })
+    ecs.setComponentOnEntity(e, 'health', { current: 10, max: 10 })
+
+    const data = ecs.getAllEntityComponentData(e)
+
+    expect(data.position).toEqual({ x: 1, y: 2 })
+    expect(data.health).toEqual({ current: 10, max: 10 })
+    expect(data.Tags).toBeDefined()
+    expect(data.Meta).toBeDefined()
+  })
+
+  test('returned component data is a clone and does not affect the store', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 1, y: 2 })
+
+    const data = ecs.getAllEntityComponentData(e)
+    expect(data.position).toBeDefined()
+    if (data.position) {
+      // TypeScript requires checking since it's Partial
+      ;(data.position as any).x = 999
+    }
+
+    const dataAfterMutation = ecs.getAllEntityComponentData(e)
+    expect(dataAfterMutation.position?.x).toBe(1)
+  })
+
+  test('throws for destroyed entity', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+    ecs.destroyEntity(e)
+
+    expect(() => {
+      ecs.getAllEntityComponentData(e)
+    }).toThrow('entity is destroyed')
+  })
+
+  test('throws for non-existent entity', () => {
+    const ecs = makeECS()
+
+    expect(() => {
+      ecs.getAllEntityComponentData(999)
+    }).toThrow('entity does not exist')
+  })
+})
+
 // ─── entityHasComponent ─────────────────────────────────────────────
 
 describe('entityHasComponent', () => {
   test('returns true when entity has the component', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'position', {
       x: 0,
@@ -408,14 +528,14 @@ describe('entityHasComponent', () => {
 
   test('returns false when entity lacks the component', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e = ecs.createEntity()
     expect(ecs.entityHasComponent(e, 'position')).toBe(false)
   })
 
   test('throws for non-existent entity', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     expect(() => ecs.entityHasComponent(999, 'position')).toThrow('entity does not exist')
   })
 
@@ -446,8 +566,8 @@ describe('getComponentsOnEntity', () => {
 
   test('includes user-defined components', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
-    ecs.defineComponent('velocity')
+    ecs.registerComponent('position')
+    ecs.registerComponent('velocity')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'position', {
       x: 0,
@@ -460,7 +580,7 @@ describe('getComponentsOnEntity', () => {
 
   test('reflects removal of components', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'position', {
       x: 0,
@@ -481,7 +601,7 @@ describe('getEntitiesByComponents', () => {
 
   test('returns entities matching a single component', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e1 = ecs.createEntity()
     const e2 = ecs.createEntity()
     ecs.setComponentOnEntity(e1, 'position', {
@@ -497,8 +617,8 @@ describe('getEntitiesByComponents', () => {
 
   test('returns entities matching multiple components', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
-    ecs.defineComponent('velocity')
+    ecs.registerComponent('position')
+    ecs.registerComponent('velocity')
     const e1 = ecs.createEntity()
     const e2 = ecs.createEntity()
     ecs.setComponentOnEntity(e1, 'position', {
@@ -518,8 +638,8 @@ describe('getEntitiesByComponents', () => {
 
   test('optimizes intersection by starting with the smallest store', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
-    ecs.defineComponent('velocity')
+    ecs.registerComponent('position')
+    ecs.registerComponent('velocity')
 
     // 100 entities with position
     for (let i = 0; i < 100; i++) {
@@ -550,7 +670,7 @@ describe('getEntitiesByComponents', () => {
 
   test('does not return destroyed entities', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e1 = ecs.createEntity()
     const e2 = ecs.createEntity()
     ecs.setComponentOnEntity(e1, 'position', {
@@ -567,7 +687,7 @@ describe('getEntitiesByComponents', () => {
 
   test('returns empty when no entities have the components', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     ecs.createEntity() // no position set
     expect(Array.from(ecs.getEntitiesByComponents('position'))).toEqual([])
   })
@@ -585,7 +705,7 @@ describe('destroyEntity', () => {
 
   test('clears all component data for destroyed entity', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'position', {
       x: 1,
@@ -650,6 +770,20 @@ describe('getEntityByPrettyId', () => {
   })
 })
 
+// ─── getActiveEntities ───────────────────────────────────────
+
+describe('getActiveEntities', () => {
+  test('gets the set of active entities', () => {
+    const ecs = makeECS()
+    ecs.createEntity()
+    ecs.createEntity()
+    ecs.createEntity()
+    ecs.destroyEntity(2)
+
+    expect(ecs.getActiveEntities()).toEqual(new Set([1, 3]))
+  })
+})
+
 // ─── readonlyFacade ──────────────────────────────────────────────
 
 describe('readonlyFacade', () => {
@@ -665,7 +799,7 @@ describe('readonlyFacade', () => {
 
   test('facade methods work correctly', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'position', {
       x: 5,
@@ -691,7 +825,7 @@ describe('readonlyFacade', () => {
     expect((facade as any).setComponentOnEntity).toBeUndefined()
     expect((facade as any).updateComponentData).toBeUndefined()
     expect((facade as any).removeComponentFromEntity).toBeUndefined()
-    expect((facade as any).defineComponent).toBeUndefined()
+    expect((facade as any).registerComponent).toBeUndefined()
     expect((facade as any).addTagToEntity).toBeUndefined()
   })
 })
@@ -830,9 +964,9 @@ describe('Systems', () => {
 describe('multi-entity integration', () => {
   test('full lifecycle: create, add components, query, update, destroy', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
-    ecs.defineComponent('velocity')
-    ecs.defineComponent('health')
+    ecs.registerComponent('position')
+    ecs.registerComponent('velocity')
+    ecs.registerComponent('health')
 
     const player = ecs.createEntity()
     const enemy = ecs.createEntity()
@@ -895,8 +1029,8 @@ describe('multi-entity integration', () => {
 
   test('many entities with varied component sets', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
-    ecs.defineComponent('label')
+    ecs.registerComponent('position')
+    ecs.registerComponent('label')
 
     const entities = Array.from({ length: 20 }, (_, i) => {
       const e = ecs.createEntity()
@@ -937,7 +1071,7 @@ describe('State Serialization', () => {
 
   test('exportSerializedState produces a valid JSON envelope', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
 
     const e1 = ecs.createEntity('hero', 'player')
     ecs.setComponentOnEntity(e1, 'position', { x: 10, y: 20 })
@@ -962,7 +1096,7 @@ describe('State Serialization', () => {
 
   test('exportSerializedState does not include destroyed entities', () => {
     const ecs = makeECS()
-    ecs.defineComponent('position')
+    ecs.registerComponent('position')
 
     const e1 = ecs.createEntity()
     ecs.setComponentOnEntity(e1, 'position', { x: 1, y: 1 })
@@ -990,7 +1124,7 @@ describe('State Serialization', () => {
   test('loadSerializedState correctly hydrates a fresh ECS', () => {
     // 1. Create and populate an ECS
     const ecsA = makeECS()
-    ecsA.defineComponent('position')
+    ecsA.registerComponent('position')
     const e1 = ecsA.createEntity('hero', 'player')
     ecsA.setComponentOnEntity(e1, 'position', { x: 42, y: 99 })
 
@@ -998,7 +1132,7 @@ describe('State Serialization', () => {
 
     // 2. Load it into a completely fresh ECS
     const ecsB = makeECS()
-    ecsB.defineComponent('position')
+    ecsB.registerComponent('position')
 
     ecsB.loadSerializedState(jsonStr, (meta) => meta.gameId === 'test-game')
 

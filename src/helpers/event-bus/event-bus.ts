@@ -23,7 +23,7 @@ export const WILDCARD = '*'
 
 export default class EventBus<
   ComponentSchema extends EngineComponentSchema & Record<string, POJO>,
-  EventMapType extends EventMapSchema = DefaultEventMap<ComponentSchema>
+  EventMapType extends EventMapSchema = DefaultEventMap<ComponentSchema>,
 > {
   #listeners = new Map<string, Set<Listener<any>>>()
   #logger: Logger
@@ -36,12 +36,9 @@ export default class EventBus<
 
   subscribe<K extends keyof EventMapType & string>(
     stream: K,
-    cb: Listener<EventMapType[K]>
+    cb: Listener<EventMapType[K]>,
   ): Disposer
-  subscribe(
-    stream: typeof WILDCARD | `${string}:*`,
-    cb: Listener<any>
-  ): Disposer
+  subscribe(stream: typeof WILDCARD | `${string}:*`, cb: Listener<any>): Disposer
   subscribe(stream: string, cb: Listener<any>): Disposer {
     if (!this.#listeners.has(stream)) {
       this.#listeners.set(stream, new Set())
@@ -79,15 +76,18 @@ export default class EventBus<
 
   async emit<K extends keyof EventMapType & string>(
     stream: K,
-    payload: EventMapType[K]
+    payload: EventMapType[K],
   ): Promise<void> {
     const event: EngineEvent<EventMapType[K]> = {
       timestamp: Date.now(),
-      payload
+      payload,
     }
 
     if (this.#debug) {
-      this.#logger.debug(`[EventBus] Emitted ${stream} at ${event.timestamp} with payload:`, event.payload)
+      this.#logger.debug(
+        `[EventBus] Emitted ${stream} at ${event.timestamp} with payload:`,
+        event.payload,
+      )
     }
 
     const listenersToInvoke = new Set<Listener<any>>()

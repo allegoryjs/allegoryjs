@@ -1,5 +1,6 @@
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
+import type { SemanticCacheData } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.types'
 import type { POJO } from '@/utilities/schemer/schemer.types'
 
 export type Entity = number
@@ -8,6 +9,7 @@ export const ENGINE_COMPONENT_SCHEMA_COMPONENTS = {
   tags: 'Tags',
   meta: 'Meta',
   noun: 'Noun',
+  semanticCache: 'SemanticCache',
 } as const
 
 export const MANDATORY_COMPONENTS = [
@@ -38,12 +40,7 @@ export interface EngineComponentSchema extends Record<string, POJO> {
     noun: string // the main noun word/concept associated with the entity, e.g. "sword" or "potion bottle"
   }
 
-  SemanticCache: {
-    fullDescriptor: string
-    fullVector: number[]
-    chunks: [descriptor: string, vector: number[]][]
-    dirty: boolean // whether the entity needs to have its cache recalculated due to component data update
-  }
+  SemanticCache: SemanticCacheData & POJO
 }
 
 export interface EcsReadonlyFacade<
@@ -62,7 +59,10 @@ export interface EcsReadonlyFacade<
   getEntityComponentData<ComponentName extends keyof ComponentSchema & string>(
     entity: Entity,
     name: ComponentName,
-  ): Readonly<ComponentSchema[ComponentName]>
+  ): ComponentSchema[ComponentName]
+  getAllEntityComponentData(
+    entity: Entity,
+  ): Partial<{ [K in keyof ComponentSchema & string]: ComponentSchema[K] }>
   getActiveEntities(): Set<Entity>
 }
 
@@ -82,7 +82,6 @@ export abstract class InitializableSystem<
   ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
 > implements System<ComponentSchema> {
   abstract readonly name: string
-  abstract readonly priority?: number
 
   private initialized = false
 
@@ -116,7 +115,6 @@ export abstract class InitializableSystem<
   protected abstract onRun(ecs: ECS<ComponentSchema>): Promise<void>
 }
 
-
 export interface EcsState<
   ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
 > {
@@ -133,6 +131,6 @@ export interface EcsStateEnvelopeMeta {
 export interface EcsStateEnvelope<
   ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
 > {
-  metadata: EcsStateEnvelopeMeta,
+  metadata: EcsStateEnvelopeMeta
   state: EcsState<ComponentSchema>
 }

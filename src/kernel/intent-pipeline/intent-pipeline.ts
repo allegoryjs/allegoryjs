@@ -35,7 +35,7 @@ import type { IntentClassificationModule } from '../../nlp/intent-classifier/int
  */
 export default class IntentPipeline<
   ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
-  EventMapType extends DefaultEventMap<ComponentSchema> = DefaultEventMap<ComponentSchema>
+  EventMapType extends DefaultEventMap<ComponentSchema> = DefaultEventMap<ComponentSchema>,
 > {
   #emitter: EventBus<ComponentSchema, EventMapType>
   #config: IntentPipelineConfig
@@ -537,7 +537,10 @@ export default class IntentPipeline<
 
     const mutations: Array<MutationOp<ComponentSchema>> = []
     const narrations: Array<string> = []
-    const events: Array<EngineEvent> = []
+    const events: Array<{
+      payload: EventMapType[keyof EventMapType & string]
+      type: keyof EventMapType & string
+    }> = []
 
     for (const contribution of contributionStack) {
       if (contribution?.mutations?.length) {
@@ -578,7 +581,7 @@ export default class IntentPipeline<
       for (const event of events) {
         this.#logger.debug(`Emitting event of type ${event.type}`)
 
-        await this.#emitter.emitDynamic(event.type, event.payload)
+        await this.#emitter.emit(event.type, event.payload)
       }
     }
   }

@@ -5,19 +5,17 @@ import type { POJO } from '@/utilities/schemer/schemer.types'
 export type EventMapSchema = Record<string, any>
 
 export interface EcsComponentModifiedEventPayload<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO>
+  ComponentSchema extends EngineComponentSchema & Record<string, POJO>,
 > {
   entity: Entity
   component: keyof ComponentSchema & string
 }
 
 export interface DefaultEventMap<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO>
+  ComponentSchema extends EngineComponentSchema & Record<string, POJO>,
 > {
   narrate: string[]
   ecsComponentModified: EcsComponentModifiedEventPayload<ComponentSchema>
-  ecsEntityCreated: Entity
-  ecsEntityDestroyed: Entity
   semanticCacheUpdated: Entity
 }
 
