@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import { DefaultLogger } from '@/helpers/logger/logger'
 import ECS from '@/kernel/ecs/ecs'
+import { entityHasTag, parseStateJson } from '@/kernel/ecs/ecs.helpers'
 import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
 
 interface TestSchema extends EngineComponentSchema {
@@ -1119,8 +1120,8 @@ describe('State Serialization', () => {
     ecs.registerComponent('cache', { serialize: false })
 
     const e1 = ecs.createEntity()
-    ecs.setComponentOnEntity(e1, 'health', { current: 95, max: 100})
-    ecs.setComponentOnEntity(e1, 'cache', { data: 'abc123'  })
+    ecs.setComponentOnEntity(e1, 'health', { current: 95, max: 100 })
+    ecs.setComponentOnEntity(e1, 'cache', { data: 'abc123' })
 
     const parsed = JSON.parse(ecs.exportSerializedState(dummyMeta))
     expect(parsed.state[e1].cache).toBe(undefined)
@@ -1173,5 +1174,334 @@ describe('State Serialization', () => {
     // The highest active ID in the save was 1, so the next ID will be 2.
     const e3 = ecsB.createEntity()
     expect(e3).toBe(2)
+  })
+})
+
+// ─── entityHasTag ───────────────────────────────────────────────────
+
+describe('entityHasTag', () => {
+  test('returns true when entity has the specified tag', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'Tags', { list: ['player', 'character'] })
+    expect(entityHasTag(ecs, e, 'player')).toBe(true)
+    expect(entityHasTag(ecs, e, 'character')).toBe(true)
+  })
+
+  test('returns false when entity does not have the specified tag', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'Tags', { list: ['player'] })
+    expect(entityHasTag(ecs, e, 'enemy')).toBe(false)
+  })
+
+  test('returns false when entity has an empty tag list', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+    expect(entityHasTag(ecs, e, 'player')).toBe(false)
+  })
+
+  test('works with ecs.readonlyFacade', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'Tags', { list: ['interactive', 'item'] })
+    const facade = ecs.readonlyFacade
+    expect(entityHasTag(facade, e, 'interactive')).toBe(true)
+    expect(entityHasTag(facade, e, 'item')).toBe(true)
+    expect(entityHasTag(facade, e, 'scenery')).toBe(false)
+  })
+
+  test('throws when entity does not exist', () => {
+    const ecs = makeECS()
+    expect(() => entityHasTag(ecs, 999, 'tag')).toThrow('entity does not exist')
+  })
+
+  test('throws when entity is destroyed', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+    ecs.destroyEntity(e)
+    expect(() => entityHasTag(ecs, e, 'tag')).toThrow('entity is destroyed')
+  })
+})
+
+// ─── parseStateJson ─────────────────────────────────────────────────
+
+describe('parseStateJson', () => {
+  const validMetadata = {
+    gameId: 'test-game',
+    engineVersion: '1.0.0',
+    gameVersion: '1.0.0',
+    savedAt: 123456789,
+  }
+
+  test('parses a valid state JSON envelope', () => {
+    const validJson = JSON.stringify({
+      metadata: validMetadata,
+      state: {
+        1: {
+          Tags: { list: ['player'] },
+          Meta: { id: 'hero', name: 'Entity_1', created: 100 },
+          position: { x: 10, y: 20 },
+        },
+        2: {
+          Tags: { list: [] },
+          Meta: { id: 'npc', name: 'Entity_2', created: 200 },
+        },
+      },
+    })
+
+    const result = parseStateJson<TestSchema>(validJson)
+    expect(result.metadata).toEqual(validMetadata)
+    expect(result.state[1]?.position).toEqual({ x: 10, y: 20 })
+    expect(result.state[1]?.Tags).toEqual({ list: ['player'] })
+    expect(result.state[2]?.Meta?.id).toBe('npc')
+  })
+
+  test('parses a valid envelope with empty state', () => {
+    const validJson = JSON.stringify({
+      metadata: validMetadata,
+      state: {},
+    })
+
+    const result = parseStateJson(validJson)
+    expect(result.metadata).toEqual(validMetadata)
+    expect(result.state).toEqual({})
+  })
+
+  test('throws on malformed JSON string', () => {
+    expect(() => parseStateJson('invalid json {')).toThrow()
+  })
+
+  test('throws when state and/or metadata JSON is not a POJO', () => {
+    // Missing fields / empty object
+    expect(() => parseStateJson(JSON.stringify({}))).toThrow(
+      'Fatal error parsing ECS state: state and/or metadata JSON is not a POJO',
+    )
+
+    // metadata is null
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: null,
+          state: {},
+        }),
+      ),
+    ).toThrow('Fatal error parsing ECS state: state and/or metadata JSON is not a POJO')
+
+    // state is null
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: validMetadata,
+          state: null,
+        }),
+      ),
+    ).toThrow('Fatal error parsing ECS state: state and/or metadata JSON is not a POJO')
+
+    // metadata is array
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: [validMetadata],
+          state: {},
+        }),
+      ),
+    ).toThrow('Fatal error parsing ECS state: state and/or metadata JSON is not a POJO')
+
+    // state is array
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: validMetadata,
+          state: [],
+        }),
+      ),
+    ).toThrow('Fatal error parsing ECS state: state and/or metadata JSON is not a POJO')
+
+    // primitive string
+    expect(() => parseStateJson(JSON.stringify('just a string'))).toThrow(
+      'Fatal error parsing ECS state: state and/or metadata JSON is not a POJO',
+    )
+  })
+
+  test('throws when metadata is invalid', () => {
+    // Missing savedAt
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: {
+            gameId: 'game',
+            engineVersion: '1.0.0',
+            gameVersion: '1.0.0',
+          },
+          state: {},
+        }),
+      ),
+    ).toThrow('Fatal error parsing ECS state: invalid metadata')
+
+    // Non-positive integer savedAt
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: {
+            ...validMetadata,
+            savedAt: 0,
+          },
+          state: {},
+        }),
+      ),
+    ).toThrow('Fatal error parsing ECS state: invalid metadata')
+
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: {
+            ...validMetadata,
+            savedAt: -10,
+          },
+          state: {},
+        }),
+      ),
+    ).toThrow('Fatal error parsing ECS state: invalid metadata')
+
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: {
+            ...validMetadata,
+            savedAt: 12.34,
+          },
+          state: {},
+        }),
+      ),
+    ).toThrow('Fatal error parsing ECS state: invalid metadata')
+
+    // Missing string metadata properties
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: {
+            ...validMetadata,
+            gameId: 123,
+          },
+          state: {},
+        }),
+      ),
+    ).toThrow('Fatal error parsing ECS state: invalid metadata')
+
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: {
+            ...validMetadata,
+            engineVersion: null,
+          },
+          state: {},
+        }),
+      ),
+    ).toThrow('Fatal error parsing ECS state: invalid metadata')
+
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: {
+            ...validMetadata,
+            gameVersion: false,
+          },
+          state: {},
+        }),
+      ),
+    ).toThrow('Fatal error parsing ECS state: invalid metadata')
+  })
+
+  test('throws when an entity ID in state is not a valid positive integer', () => {
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: validMetadata,
+          state: {
+            '0': {
+              Tags: { list: [] },
+            },
+          },
+        }),
+      ),
+    ).toThrow('Fatal error loading ECS state: 0 is not a valid entity ID')
+
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: validMetadata,
+          state: {
+            '-1': {
+              Tags: { list: [] },
+            },
+          },
+        }),
+      ),
+    ).toThrow('Fatal error loading ECS state: -1 is not a valid entity ID')
+
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: validMetadata,
+          state: {
+            invalid: {
+              Tags: { list: [] },
+            },
+          },
+        }),
+      ),
+    ).toThrow('Fatal error loading ECS state: invalid is not a valid entity ID')
+  })
+
+  test('throws when entity component data is not a POJO', () => {
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: validMetadata,
+          state: {
+            1: 'not-a-pojo',
+          },
+        }),
+      ),
+    ).toThrow('Fatal error parsing state string: component data objects must be POJOs')
+
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: validMetadata,
+          state: {
+            1: null,
+          },
+        }),
+      ),
+    ).toThrow('Fatal error parsing state string: component data objects must be POJOs')
+
+    expect(() =>
+      parseStateJson(
+        JSON.stringify({
+          metadata: validMetadata,
+          state: {
+            1: [1, 2, 3],
+          },
+        }),
+      ),
+    ).toThrow('Fatal error parsing state string: component data objects must be POJOs')
+  })
+
+  test('successfully parses state produced by exportSerializedState', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity('hero', 'player')
+    ecs.setComponentOnEntity(e, 'position', { x: 50, y: 75 })
+
+    const serialized = ecs.exportSerializedState(validMetadata)
+    const envelope = parseStateJson<TestSchema>(serialized)
+
+    expect(envelope.metadata).toEqual(validMetadata)
+    expect(envelope.state[e]?.position).toEqual({ x: 50, y: 75 })
+    expect(envelope.state[e]?.Meta?.id).toBe('hero')
+    expect(envelope.state[e]?.Noun?.noun).toBe('player')
   })
 })

@@ -14,6 +14,7 @@ import {
   type EcsStateEnvelope,
   type EcsState,
   type ComponentRegistrationOptions,
+  type MandatoryComponent,
 } from '@/kernel/ecs/ecs.types'
 import deepFreeze from '@/utilities/deep-freeze'
 import type { POJO } from '@/utilities/schemer/schemer.types'
@@ -368,6 +369,14 @@ export default class ECS<
     return data
   }
 
+  getEntityComponentData<ComponentName extends MandatoryComponent>(
+    entity: Entity,
+    name: ComponentName,
+  ): ComponentSchema[ComponentName]
+  getEntityComponentData<ComponentName extends keyof ComponentSchema & string>(
+    entity: Entity,
+    name: ComponentName,
+  ): ComponentSchema[ComponentName] | undefined
   getEntityComponentData<ComponentName extends keyof ComponentSchema & string>(
     entity: Entity,
     name: ComponentName,

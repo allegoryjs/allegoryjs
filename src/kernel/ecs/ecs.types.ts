@@ -17,6 +17,8 @@ export const MANDATORY_COMPONENTS = [
   ENGINE_COMPONENT_SCHEMA_COMPONENTS.meta,
 ] as const
 
+export type MandatoryComponent = typeof MANDATORY_COMPONENTS[number]
+
 export interface EngineComponentSchema extends Record<string, POJO> {
   // all entities have this component
   Tags: {
@@ -66,6 +68,10 @@ export interface EcsReadonlyFacade<
   getEntitiesByComponents<ComponentName extends keyof ComponentSchema & string>(
     ...componentTypes: ComponentName[]
   ): Set<Entity>
+  getEntityComponentData<ComponentName extends MandatoryComponent>(
+    entity: Entity,
+    name: ComponentName,
+  ): ComponentSchema[ComponentName]
   getEntityComponentData<ComponentName extends keyof ComponentSchema & string>(
     entity: Entity,
     name: ComponentName,

@@ -1,6 +1,6 @@
 import type EventBus from '@/helpers/event-bus/event-bus'
 import { defaultEmitStreams } from '@/helpers/event-bus/event-bus'
-import type { DefaultEventMap, EngineEvent } from '@/helpers/event-bus/event-bus.types'
+import type { DefaultEventMap } from '@/helpers/event-bus/event-bus.types'
 import type LocalizationModule from '@/helpers/localization/localization'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
@@ -23,6 +23,8 @@ import type {
 } from '@/kernel/intent-pipeline/intent-pipeline.types'
 
 import type { IntentClassificationModule } from '../../nlp/intent-classifier/intent-classifier.types'
+
+import { entityHasTag } from '@/kernel/ecs/ecs.helpers'
 
 /**
  * @class IntentPipeline
@@ -162,7 +164,7 @@ export default class IntentPipeline<
       concern?.tags?.reduce((acc, tag) => {
         this.#logger.debug(`Checking concern for match with tag ${tag}`)
 
-        if (this.#ecs.entityHasTag(entity, tag)) {
+        if (entityHasTag(this.#ecs, entity, tag)) {
           this.#logger.debug(
             `Entity ${entity} has tag ${tag}; adding ${this.#config.biddingTagsMatchPrice} to concern tag score accumulator`,
           )

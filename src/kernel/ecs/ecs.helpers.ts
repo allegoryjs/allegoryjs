@@ -1,11 +1,27 @@
-import type {
-  EcsState,
-  EcsStateEnvelope,
-  EcsStateEnvelopeMeta,
-  EngineComponentSchema,
+import {
+  ENGINE_COMPONENT_SCHEMA_COMPONENTS,
+  type EcsReadonlyFacade,
+  type EcsState,
+  type EcsStateEnvelope,
+  type EcsStateEnvelopeMeta,
+  type EngineComponentSchema,
+  type Entity,
 } from '@/kernel/ecs/ecs.types'
 import { isPojo, isPositiveInteger, isString } from '@/utilities/schemer'
 import type { POJO } from '@/utilities/schemer/schemer.types'
+import type ECS from '@/kernel/ecs/ecs'
+
+export function entityHasTag<
+  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema
+>(
+  ecs: EcsReadonlyFacade<ComponentSchema> | ECS<ComponentSchema>,
+  entity: Entity,
+  tag: string
+) {
+  return ecs.getEntityComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags)
+            .list
+            .includes(tag)
+}
 
 function validateMetadata(obj: unknown): obj is EcsStateEnvelopeMeta {
   if (!isPojo(obj)) {
