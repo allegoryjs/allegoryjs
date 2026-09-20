@@ -43,6 +43,16 @@ export interface EngineComponentSchema extends Record<string, POJO> {
   SemanticCache: SemanticCacheData & POJO
 }
 
+export interface ComponentRegistrationOptions {
+  /**
+   * Whether the component data should be serialized when exporting ECS state.
+   * Set to false for data which can be derived at engine init, to reduce the size of save files.
+   *
+   * @default true
+   */
+  serialize?: boolean
+}
+
 export interface EcsReadonlyFacade<
   ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
 > {
@@ -59,7 +69,7 @@ export interface EcsReadonlyFacade<
   getEntityComponentData<ComponentName extends keyof ComponentSchema & string>(
     entity: Entity,
     name: ComponentName,
-  ): ComponentSchema[ComponentName]
+  ): ComponentSchema[ComponentName] | undefined
   getAllEntityComponentData(
     entity: Entity,
   ): Partial<{ [K in keyof ComponentSchema & string]: ComponentSchema[K] }>

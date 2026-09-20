@@ -11,6 +11,7 @@ interface TestSchema extends EngineComponentSchema {
   stats: { strength: number; intelligence: number; dexterity: number }
   label: { text: string }
   nested: { a: { b: number } }
+  cache: { data: string }
 }
 
 import EventBus from '@/helpers/event-bus/event-bus'
@@ -53,16 +54,16 @@ describe('createEntity', () => {
     const ecs = makeECS()
     const e = ecs.createEntity()
     const meta = ecs.getEntityComponentData(e, 'Meta')
-    expect(meta.name).toBe('Entity_1')
-    expect(meta.id).toBe('entity_1')
-    expect(typeof meta.created).toBe('number')
+    expect(meta?.name).toBe('Entity_1')
+    expect(meta?.id).toBe('entity_1')
+    expect(typeof meta?.created).toBe('number')
   })
 
   test('Meta component uses provided metaId', () => {
     const ecs = makeECS()
     const e = ecs.createEntity('player-1')
     const meta = ecs.getEntityComponentData(e, 'Meta')
-    expect(meta.id).toBe('player-1')
+    expect(meta?.id).toBe('player-1')
   })
 
   test('getEntityByPrettyId returns entity created with metaId', () => {
@@ -311,8 +312,8 @@ describe('updateComponentData', () => {
     ecs.updateComponentData(e, 'nested', { a: { c: 2 } } as any)
 
     const data = ecs.getEntityComponentData(e, 'nested')
-    expect(data.a).toEqual({ c: 2 } as any)
-    expect((data.a as any).b).toBeUndefined()
+    expect(data?.a).toEqual({ c: 2 } as any)
+    expect((data?.a as any)?.b).toBeUndefined()
   })
 
   test('throws for unknown component type', () => {
@@ -411,7 +412,7 @@ describe('getEntityComponentData', () => {
     })
     const data = ecs.getEntityComponentData(e, 'position')
     expect(data).toEqual(expect.objectContaining({ x: 1, y: 2 }))
-    data.x = 999
+    data!.x = 999
     expect(ecs.getEntityComponentData(e, 'position')).toEqual(
       expect.objectContaining({ x: 1, y: 2 }),
     )
@@ -660,7 +661,7 @@ describe('getEntitiesByComponents', () => {
     // getEntitiesByComponents should pick velocity store first.
     const result = Array.from(ecs.getEntitiesByComponents('position', 'velocity'))
     expect(result.length).toBe(1)
-    expect(ecs.getEntityComponentData(result[0]!, 'position').x).toBe(50)
+    expect(ecs.getEntityComponentData(result[0]!, 'position')?.x).toBe(50)
   })
 
   test('throws for unknown component types', () => {
@@ -1110,6 +1111,20 @@ describe('State Serialization', () => {
 
     expect(parsed.state[e1]).toBeUndefined()
     expect(parsed.state[e2]).toBeDefined()
+  })
+
+  test('exportSerializedState excludes components which are marked as non-serialized', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('health')
+    ecs.registerComponent('cache', { serialize: false })
+
+    const e1 = ecs.createEntity()
+    ecs.setComponentOnEntity(e1, 'health', { current: 95, max: 100})
+    ecs.setComponentOnEntity(e1, 'cache', { data: 'abc123'  })
+
+    const parsed = JSON.parse(ecs.exportSerializedState(dummyMeta))
+    expect(parsed.state[e1].cache).toBe(undefined)
+    expect(parsed.state[e1].health).toEqual({ current: 95, max: 100 })
   })
 
   test('loadSerializedState throws if metadata validation fails', () => {

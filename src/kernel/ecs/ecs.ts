@@ -13,6 +13,7 @@ import {
   type EcsStateEnvelopeMeta,
   type EcsStateEnvelope,
   type EcsState,
+  type ComponentRegistrationOptions,
 } from '@/kernel/ecs/ecs.types'
 import deepFreeze from '@/utilities/deep-freeze'
 import type { POJO } from '@/utilities/schemer/schemer.types'
@@ -28,6 +29,7 @@ export default class ECS<
     Map<Entity, ComponentSchema[keyof ComponentSchema & string]>
   >()
   #prettyIdMap = new Map<string, Entity>()
+  #nonSerializedComponents = new Set<keyof ComponentSchema & string>()
 
   #systems = new Map<string, System<ComponentSchema>>()
   #logger: Logger
@@ -139,11 +141,10 @@ export default class ECS<
   exportSerializedState(metadata: EcsStateEnvelopeMeta): string {
     const state: Record<Entity, POJO> = {}
 
-    for (const [componentName, entityMapUntyped] of this.#components.entries()) {
-      const entityMap = entityMapUntyped as Map<
-        Entity,
-        ComponentSchema[keyof ComponentSchema & string]
-      >
+    for (const [componentName, entityMap] of this.#components.entries()) {
+      if (this.#nonSerializedComponents.has(componentName)) {
+        continue
+      }
 
       for (const [entity, componentData] of entityMap.entries()) {
         if (!state[entity]) {
@@ -167,10 +168,17 @@ export default class ECS<
     return result
   }
 
-  registerComponent(name: keyof ComponentSchema & string) {
+  registerComponent(
+    name: keyof ComponentSchema & string,
+    { serialize }: ComponentRegistrationOptions = { serialize: true }
+  ) {
     if (this.#components.has(name)) {
       const err = `Error registering component ${String(name)}: a component by that name is already registered`
       this.#logger.errorAndThrow(err)
+    }
+
+    if (!serialize) {
+      this.#nonSerializedComponents.add(name)
     }
 
     this.#components.set(name, new Map())
@@ -363,7 +371,7 @@ export default class ECS<
   getEntityComponentData<ComponentName extends keyof ComponentSchema & string>(
     entity: Entity,
     name: ComponentName,
-  ): ComponentSchema[ComponentName] {
+  ): ComponentSchema[ComponentName] | undefined {
     this.#assertEntityExists(entity, 'get component data for')
 
     const store = this.#components.get(name)
@@ -454,10 +462,10 @@ export default class ECS<
   destroyEntity(entity: Entity) {
     this.#assertEntityExists(entity, 'destroy')
 
-    const prettyId = this.getEntityComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.meta).id
+    const prettyId = this.getEntityComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.meta)?.id
 
     if (!prettyId) {
-      const err = `Critical logic error: Attempting to destroy entity ${entity}, but it has no pretty ID. All entities must have the Meta component and a pretty ID.`
+      const err = `Critical error: Attempting to destroy entity ${entity}, but it has no pretty ID. All entities must have the Meta component and a pretty ID.`
       this.#logger.errorAndThrow(err)
     }
 

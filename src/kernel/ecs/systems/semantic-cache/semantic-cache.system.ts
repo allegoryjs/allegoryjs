@@ -34,6 +34,43 @@ function aggregateDescriptors<ComponentSchema extends EngineComponentSchema & Re
   }
 }
 
+/**
+ * The semantic resolution system connects entities in the ECS to the NLP pipeline.
+ *
+ * In order for the NLP pipeline to have a way of "understanding" the dynamic state of the game
+ * without re-training the models, this system generates `descriptors`, which are programmatically
+ * constructed from game state. A `resolver` must be provided for any components which the game
+ * engine needs to be able to associate with an entity at runtime as a result of player input.
+ * Descriptors should only include information that the player should know about;
+ * e.g., if an item is secretly cursed, the user should likely not be able to pick it up with
+ * "pick up the cursed amulet" until they have identified that it is cursed.
+ *
+ * For example, imagine a component called DamageComponent, which has data shaped like `{ health: 80, statusEffects: ['poisoned', 'blessed']}`
+ * The resolver for that component might look like:
+ * ```
+ * (componentState: DamageComponentState) => {
+ *   let healthLevel
+ *   if (componentState.health < 30) {
+ *       healthLevel = 'low health'
+ *   } else {
+ *       healthLevel = 'healthy'
+ *   }
+ *
+ *   const statusEffectText = componentState.statusEffects.length ? componentState.statusEffects.join(', ') : 'none'
+ *
+ *   return `Health level: ${health level}, status effects: ${statusEffectText}`
+ * }
+ *
+ * // outputs 'Health level: healthy, status effects: poisoned, blessed'
+ * ```
+ *
+ * Note that the Noun component is crucial for the entity association step. Descriptors are chunked by component
+ * to avoid embedding dilution, and to ensure that descriptors from the Semantic Cache are associated with the
+ * correct entity, the Noun.noun value will be prefixed on the descriptors from this cache.
+ * e.g. looking at the above example of DamageComponent, if it is attached to an entity representing a goblin,
+ * you might attach a Noun to the goblin, "goblin"; the vectors cached by this system will include it like
+ * "goblin: health level: 33, status effects: poisoned, blessed" per chunk.
+ */
 export class SemanticCacheSystem<
   ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
   EventMapType extends DefaultEventMap<ComponentSchema> = DefaultEventMap<ComponentSchema>,
@@ -82,7 +119,7 @@ export class SemanticCacheSystem<
       const { dirty } = this.#ecs.getEntityComponentData(
         entity,
         ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
-      )
+      ) ?? {}
 
       if (dirty) {
         this.#buildCacheForEntity(entity)
@@ -122,6 +159,16 @@ export class SemanticCacheSystem<
     }
 
     this.#resolvers.set(componentName, resolver as (componentData: any) => string)
+
+    const entitiesWithComponent = this.#ecs.getEntitiesByComponents(componentName)
+
+    for (const entity of entitiesWithComponent) {
+      this.#ecs.updateComponentData(
+        entity,
+        ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+        { dirty: true },
+      )
+    }
   }
 
   deregisterResolver<K extends keyof ComponentSchema & string>(componentName: K) {
@@ -167,12 +214,10 @@ export class SemanticCacheSystem<
     }
 
     if (componentDescriptors.size === 0) {
-      this.logger.info(
-        `
+      this.logger.info(`
         Attempted to build cache for entity ${entity}, but entity has no components which have corresponding resolvers.
         Removing Semantic Cache component from entity, as the resulting descriptor cache would be empty
-      `.trim(),
-      )
+      `.trim())
 
       this.#ecs.removeComponentFromEntity(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)
 
@@ -193,7 +238,7 @@ export class SemanticCacheSystem<
   }
 
   #buildCache() {
-    this.logger.debug('Rebuilding semantic caches for all entities')
+    this.logger.debug('Building semantic caches for all entities')
 
     const activeEntitiesWithCache = this.#ecs.getEntitiesByComponents(
       ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
@@ -217,11 +262,23 @@ export class SemanticCacheSystem<
     const resolver = this.#resolvers.get(component)
 
     if (!resolver) {
-      this.logger.debug(
-        `
+      this.logger.debug(`
         Component modification handler triggered in Semantic Cache system, but no resolver exists for component ${component}; returning.
-      `.trim(),
-      )
+      `.trim())
+
+      return
+    }
+
+    const entityHasNoun = !!(this.#ecs.getEntityComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.noun)?.noun)
+
+    if (!entityHasNoun) {
+      this.logger.debug(`
+        Component modification handler triggered in Semantic Cache system for entity ${entity},
+        and there is a resolver registered for component ${component}, but entity does not have the Noun component.
+        Skipping semantic cache generation. Player will not be able to directly interact with this entity.
+      `.trim())
+
+      return
     }
 
     const cacheExists = this.#ecs.entityHasComponent(
@@ -230,69 +287,21 @@ export class SemanticCacheSystem<
     )
 
     if (!cacheExists) {
-      this.logger.debug(
-        `
+      this.logger.debug(`
         A semantic cache resolver exists for component ${component}, and entity ${entity} has that component,
         but no cache entry exists for the entity. Marking entity for descriptor cache generation.
-      `.trim(),
-      )
+      `.trim())
       this.#ecs.setComponentOnEntity(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
         dirty: true,
       })
     } else {
-      this.logger.debug(
-        `
+      this.logger.debug(`
         A semantic cache resolver exists for component ${component}, entity ${entity} has that component,
         and a cache entry exists for the entity. Marking entity for descriptor cache regeneration.
-      `.trim(),
-      )
+      `.trim())
       this.#ecs.updateComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
         dirty: true,
       })
     }
   }
 }
-
-/**
- * eztodo clean this up
- *
- * The semantic resolution system connects entities in the ECS to the NLP pipeline.
- * **Must be initialized before use and disposed of after use (with the `using` keyword or the `dispose` method)**.
- *
- * In order for the NLP pipeline to have a way of "understanding" the dynamic state of the game
- * without re-training the models, this system generates `descriptors`, which are programmatically
- * constructed from game state. A `resolver` must be provided for any components which the game
- * engine needs to be able to associate with an entity at runtime. Descriptors should only include
- * information that the player should know about; e.g., if an item is secretly cursed, the user should likely
- * not be able to pick it up with "pick up the cursed amulet" until they have identified that it is cursed.
- *
- * For example, imagine a component called DamageComponent, which has data shaped like `{ health: 80, statusEffects: ['poisoned', 'blessed']}`
- * The resolver for that component might look like:
- * ```
- * (componentState: DamageComponentState) => {
- *   let healthLevel
- *   if (componentState.health < 30) {
- *       healthLevel = 'low health'
- *   } else {
- *       healthLevel = 'healthy'
- *   }
- *
- *   const statusEffectText = componentState.statusEffects.length ? componentState.statusEffects.join(', ') : 'none'
- *
- *   return `Health level: ${health level}, status effects: ${statusEffectText}`
- * }
- *
- * // outputs 'Health level: healthy, status effects: poisoned, blessed'
- * ```
- *
- *
- * @example
- * using semanticResolutionSystem1 = createSemanticResolutionSystem(eventBus)
- * semanticResolutionSystem1.init() // no need to dispose if using the 'using' keyword
- *
- * // or
- *
- * const semanticResolutionSystem2 = createSemanticResolutionSystem(eventBus)
- * semanticResolutionSystem2.init()
- * semanticResolutionSystem2.dispose()
- */
