@@ -88,7 +88,6 @@ export class IntentClassifier<ComponentSchema extends EngineComponentSchema> {
     env.allowLocalModels = true
     env.allowRemoteModels = true
 
-    // eztodo err handling
     this.#actionPipeline = await pipeline('text-classification', this.#config.actionModelUrl)
     this.#nerPipeline = await pipeline('token-classification', this.#config.nerModelUrl)
 
@@ -110,6 +109,19 @@ export class IntentClassifier<ComponentSchema extends EngineComponentSchema> {
         auxiliaries,
       }
     })
+
+    // eztodo remove comment
+    // now i have a list of commands which have actual engine action names, and plain-text, unresolved entity descriptors
+    // so what i need to do is:
+    //     1. get a set of entities which are salient
+    //     2. get all semantic descriptors for each entity
+    //     3. Per Intent: figure out based on the plain-text targets/auxiliaries which descriptors, if any, match
+    //         - needs to be done for each target and each auxiliary
+    //         - get cosine similarity of target/aux and each descriptor (first whole descriptor, then for each chunk)
+    //         - for each target/aux plain-text, save the entity with the highest similarity score + the score
+    //             - what to do if some entities tie in cosine similarity score?
+    //     4. save the entity IDs in the returned Intent object as the target(s) and aux(s)
+    //     5. return intents
   }
 
   #assertReady() {
@@ -162,6 +174,6 @@ export class IntentClassifier<ComponentSchema extends EngineComponentSchema> {
   async #matchEntities(subject: string): Promise<Set<Entity>> {
     this.#assertReady()
 
-    this.#semanticResolutionSystem?.getEntityDescriptor()
+
   }
 }

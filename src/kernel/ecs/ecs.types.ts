@@ -2,6 +2,7 @@ import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
 import type { SemanticCacheData } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.types'
 import type { POJO } from '@/utilities/schemer/schemer.types'
+import type { SalienceCacheData } from '@/kernel/ecs/systems/salience/salience.types'
 
 export type Entity = number
 
@@ -43,6 +44,8 @@ export interface EngineComponentSchema extends Record<string, POJO> {
   }
 
   SemanticCache: SemanticCacheData & POJO
+
+  SalienceCache: SalienceCacheData & POJO
 }
 
 export interface ComponentRegistrationOptions {
