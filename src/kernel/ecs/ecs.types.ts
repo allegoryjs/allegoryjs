@@ -1,8 +1,8 @@
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
+import type { SalienceCacheData } from '@/kernel/ecs/systems/salience/salience.types'
 import type { SemanticCacheData } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.types'
 import type { POJO } from '@/utilities/schemer/schemer.types'
-import type { SalienceCacheData } from '@/kernel/ecs/systems/salience/salience.types'
 
 export type Entity = number
 
@@ -18,7 +18,7 @@ export const MANDATORY_COMPONENTS = [
   ENGINE_COMPONENT_SCHEMA_COMPONENTS.meta,
 ] as const
 
-export type MandatoryComponent = typeof MANDATORY_COMPONENTS[number]
+export type MandatoryComponent = (typeof MANDATORY_COMPONENTS)[number]
 
 export interface EngineComponentSchema extends Record<string, POJO> {
   // all entities have this component
@@ -59,7 +59,7 @@ export interface ComponentRegistrationOptions {
 }
 
 export interface EcsReadonlyFacade<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
+  ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
 > {
   entityExists(entity: Entity): boolean
   entityHasComponent<ComponentName extends keyof ComponentSchema & string>(
@@ -85,9 +85,7 @@ export interface EcsReadonlyFacade<
   getActiveEntities(): Set<Entity>
 }
 
-export interface System<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
-> {
+export interface System<ComponentSchema extends EngineComponentSchema = EngineComponentSchema> {
   readonly name: string
   readonly priority?: number
 
@@ -98,7 +96,7 @@ export interface System<
 }
 
 export abstract class InitializableSystem<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
+  ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
 > implements System<ComponentSchema> {
   abstract readonly name: string
 
@@ -134,9 +132,7 @@ export abstract class InitializableSystem<
   protected abstract onRun(ecs: ECS<ComponentSchema>): Promise<void>
 }
 
-export interface EcsState<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
-> {
+export interface EcsState<ComponentSchema extends EngineComponentSchema = EngineComponentSchema> {
   [entityId: number]: EngineComponentSchema & Partial<ComponentSchema>
 }
 
@@ -148,7 +144,7 @@ export interface EcsStateEnvelopeMeta {
 }
 
 export interface EcsStateEnvelope<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
+  ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
 > {
   metadata: EcsStateEnvelopeMeta
   state: EcsState<ComponentSchema>

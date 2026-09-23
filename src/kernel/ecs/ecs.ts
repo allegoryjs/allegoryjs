@@ -20,7 +20,7 @@ import deepFreeze from '@/utilities/deep-freeze'
 import type { POJO } from '@/utilities/schemer/schemer.types'
 
 export default class ECS<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
+  ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
   EventMapType extends DefaultEventMap<ComponentSchema> = DefaultEventMap<ComponentSchema>,
 > {
   #nextEntityId = 1
@@ -171,7 +171,7 @@ export default class ECS<
 
   registerComponent(
     name: keyof ComponentSchema & string,
-    { serialize }: ComponentRegistrationOptions = { serialize: true }
+    { serialize }: ComponentRegistrationOptions = { serialize: true },
   ) {
     if (this.#components.has(name)) {
       const err = `Error registering component ${String(name)}: a component by that name is already registered`
@@ -471,7 +471,10 @@ export default class ECS<
   destroyEntity(entity: Entity) {
     this.#assertEntityExists(entity, 'destroy')
 
-    const prettyId = this.getEntityComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.meta)?.id
+    const prettyId = this.getEntityComponentData(
+      entity,
+      ENGINE_COMPONENT_SCHEMA_COMPONENTS.meta,
+    )?.id
 
     if (!prettyId) {
       const err = `Critical error: Attempting to destroy entity ${entity}, but it has no pretty ID. All entities must have the Meta component and a pretty ID.`

@@ -1,3 +1,4 @@
+import type ECS from '@/kernel/ecs/ecs'
 import {
   ENGINE_COMPONENT_SCHEMA_COMPONENTS,
   type EcsReadonlyFacade,
@@ -8,19 +9,15 @@ import {
   type Entity,
 } from '@/kernel/ecs/ecs.types'
 import { isPojo, isPositiveInteger, isString } from '@/utilities/schemer'
-import type { POJO } from '@/utilities/schemer/schemer.types'
-import type ECS from '@/kernel/ecs/ecs'
 
-export function entityHasTag<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema
->(
+export function entityHasTag<ComponentSchema extends EngineComponentSchema = EngineComponentSchema>(
   ecs: EcsReadonlyFacade<ComponentSchema> | ECS<ComponentSchema>,
   entity: Entity,
-  tag: string
+  tag: string,
 ) {
-  return ecs.getEntityComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags)
-            .list
-            .includes(tag)
+  return ecs
+    .getEntityComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags)
+    .list.includes(tag)
 }
 
 function validateMetadata(obj: unknown): obj is EcsStateEnvelopeMeta {
@@ -34,9 +31,9 @@ function validateMetadata(obj: unknown): obj is EcsStateEnvelopeMeta {
   )
 }
 
-function validateState<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
->(obj: unknown): obj is EcsState<ComponentSchema> {
+function validateState<ComponentSchema extends EngineComponentSchema = EngineComponentSchema>(
+  obj: unknown,
+): obj is EcsState<ComponentSchema> {
   if (!isPojo(obj)) {
     return false
   }
@@ -55,7 +52,7 @@ function validateState<
 }
 
 export function parseStateJson<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
+  ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
 >(stateString: string): EcsStateEnvelope<ComponentSchema> {
   const { metadata, state } = JSON.parse(stateString)
 

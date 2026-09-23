@@ -9,7 +9,6 @@ import type {
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
-import type { POJO } from '@/utilities/schemer/schemer.types'
 
 export const defaultEmitStreams = {
   narrate: 'narrate',
@@ -22,7 +21,7 @@ export const defaultEmitStreams = {
 export const WILDCARD = '*'
 
 export default class EventBus<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO>,
+  ComponentSchema extends EngineComponentSchema,
   EventMapType extends EventMapSchema = DefaultEventMap<ComponentSchema>,
 > {
   #listeners = new Map<string, Set<Listener<any>>>()

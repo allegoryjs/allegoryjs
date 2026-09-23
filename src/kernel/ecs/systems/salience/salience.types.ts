@@ -1,5 +1,4 @@
 import type { EngineComponentSchema, System } from '@/kernel/ecs/ecs.types'
-import type { POJO } from '@/utilities/schemer/schemer.types'
 
 export const SalienceConfidence = {
   authoritative: 1.0,
@@ -27,20 +26,15 @@ export const SalienceScore = {
   standard: 0.5,
   peripheral: 0.33,
   vague: 0.17,
-  zero: 0.0
+  zero: 0.0,
 } as const
 
-export interface SalienceVote {
-
-}
+export interface SalienceVote {}
 
 export interface SalienceVoter<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
+  ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
 > extends System<ComponentSchema> {
   voteSalience(): SalienceVote
-
 }
 
-export interface SalienceCacheData {
-
-}
+export interface SalienceCacheData {}

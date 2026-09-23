@@ -3,10 +3,9 @@ import type { DefaultEventMap } from '@/helpers/event-bus/event-bus.types'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
 import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
-import type { POJO } from '@/utilities/schemer/schemer.types'
 
 export interface SemanticCacheConfig<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
+  ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
   EventMapType extends DefaultEventMap<ComponentSchema> = DefaultEventMap<ComponentSchema>,
 > {
   ecs: ECS<ComponentSchema>

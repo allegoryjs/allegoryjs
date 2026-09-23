@@ -18,11 +18,10 @@ import type {
   DescriptorCacheEntry,
   SemanticCacheConfig,
 } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.types'
-import type { POJO } from '@/utilities/schemer/schemer.types'
 
 const DESCRIPTOR_DELIMITER = ';;'
 
-function aggregateDescriptors<ComponentSchema extends EngineComponentSchema & Record<string, POJO>>(
+function aggregateDescriptors<ComponentSchema extends EngineComponentSchema>(
   descriptors: Map<keyof ComponentSchema & string, string>,
 ): DescriptorCacheEntry {
   return {
@@ -72,7 +71,7 @@ function aggregateDescriptors<ComponentSchema extends EngineComponentSchema & Re
  * "goblin: health level: 33, status effects: poisoned, blessed" per chunk.
  */
 export class SemanticCacheSystem<
-  ComponentSchema extends EngineComponentSchema & Record<string, POJO> = EngineComponentSchema,
+  ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
   EventMapType extends DefaultEventMap<ComponentSchema> = DefaultEventMap<ComponentSchema>,
 > extends InitializableSystem<ComponentSchema> {
   #initialized = false
@@ -116,10 +115,11 @@ export class SemanticCacheSystem<
     )
 
     entitiesWithCache.forEach((entity) => {
-      const { dirty } = this.#ecs.getEntityComponentData(
-        entity,
-        ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
-      ) ?? {}
+      const { dirty } =
+        this.#ecs.getEntityComponentData(
+          entity,
+          ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+        ) ?? {}
 
       if (dirty) {
         this.#buildCacheForEntity(entity)
@@ -163,11 +163,9 @@ export class SemanticCacheSystem<
     const entitiesWithComponent = this.#ecs.getEntitiesByComponents(componentName)
 
     for (const entity of entitiesWithComponent) {
-      this.#ecs.updateComponentData(
-        entity,
-        ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
-        { dirty: true },
-      )
+      this.#ecs.updateComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+        dirty: true,
+      })
     }
   }
 
@@ -214,10 +212,12 @@ export class SemanticCacheSystem<
     }
 
     if (componentDescriptors.size === 0) {
-      this.logger.info(`
+      this.logger.info(
+        `
         Attempted to build cache for entity ${entity}, but entity has no components which have corresponding resolvers.
         Removing Semantic Cache component from entity, as the resulting descriptor cache would be empty
-      `.trim())
+      `.trim(),
+      )
 
       this.#ecs.removeComponentFromEntity(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)
 
@@ -262,21 +262,28 @@ export class SemanticCacheSystem<
     const resolver = this.#resolvers.get(component)
 
     if (!resolver) {
-      this.logger.debug(`
+      this.logger.debug(
+        `
         Component modification handler triggered in Semantic Cache system, but no resolver exists for component ${component}; returning.
-      `.trim())
+      `.trim(),
+      )
 
       return
     }
 
-    const entityHasNoun = !!(this.#ecs.getEntityComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.noun)?.noun)
+    const entityHasNoun = !!this.#ecs.getEntityComponentData(
+      entity,
+      ENGINE_COMPONENT_SCHEMA_COMPONENTS.noun,
+    )?.noun
 
     if (!entityHasNoun) {
-      this.logger.debug(`
+      this.logger.debug(
+        `
         Component modification handler triggered in Semantic Cache system for entity ${entity},
         and there is a resolver registered for component ${component}, but entity does not have the Noun component.
         Skipping semantic cache generation. Player will not be able to directly interact with this entity.
-      `.trim())
+      `.trim(),
+      )
 
       return
     }
@@ -287,18 +294,22 @@ export class SemanticCacheSystem<
     )
 
     if (!cacheExists) {
-      this.logger.debug(`
+      this.logger.debug(
+        `
         A semantic cache resolver exists for component ${component}, and entity ${entity} has that component,
         but no cache entry exists for the entity. Marking entity for descriptor cache generation.
-      `.trim())
+      `.trim(),
+      )
       this.#ecs.setComponentOnEntity(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
         dirty: true,
       })
     } else {
-      this.logger.debug(`
+      this.logger.debug(
+        `
         A semantic cache resolver exists for component ${component}, entity ${entity} has that component,
         and a cache entry exists for the entity. Marking entity for descriptor cache regeneration.
-      `.trim())
+      `.trim(),
+      )
       this.#ecs.updateComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
         dirty: true,
       })
