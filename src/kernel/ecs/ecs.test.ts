@@ -3,17 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import ECS from '@/kernel/ecs/ecs'
 import { entityHasTag, parseStateJson } from '@/kernel/ecs/ecs.helpers'
-import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
 
-interface TestSchema extends EngineComponentSchema {
-  position: { x: number; y: number }
-  velocity: { x: number; y: number }
-  health: { current: number; max: number }
-  stats: { strength: number; intelligence: number; dexterity: number }
-  label: { text: string }
-  nested: { a: { b: number } }
-  cache: { data: string }
-}
 
 import EventBus from '@/helpers/event-bus/event-bus'
 
@@ -25,7 +15,7 @@ function makeECS() {
     warn: false,
   })
   const eventBus = new EventBus()
-  return new ECS<TestSchema>(eventBus, logger)
+  return new ECS(eventBus, logger)
 }
 
 // ─── createEntity ───────────────────────────────────────────────────
@@ -877,7 +867,7 @@ describe('Systems', () => {
 
   test('systems use default priority when none is provided', () => {
     // Default priority set to 25
-    const ecs = new ECS<TestSchema>(new EventBus(), undefined, 25)
+    const ecs = new ECS(new EventBus(), undefined, 25)
     const s1 = {
       name: 's1',
       priority: 50,
@@ -1250,7 +1240,7 @@ describe('parseStateJson', () => {
       },
     })
 
-    const result = parseStateJson<TestSchema>(validJson)
+    const result = parseStateJson(validJson)
     expect(result.metadata).toEqual(validMetadata)
     expect(result.state[1]?.position).toEqual({ x: 10, y: 20 })
     expect(result.state[1]?.Tags).toEqual({ list: ['player'] })
@@ -1497,7 +1487,7 @@ describe('parseStateJson', () => {
     ecs.setComponentOnEntity(e, 'position', { x: 50, y: 75 })
 
     const serialized = ecs.exportSerializedState(validMetadata)
-    const envelope = parseStateJson<TestSchema>(serialized)
+    const envelope = parseStateJson(serialized)
 
     expect(envelope.metadata).toEqual(validMetadata)
     expect(envelope.state[e]?.position).toEqual({ x: 50, y: 75 })

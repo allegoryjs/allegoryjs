@@ -6,7 +6,7 @@ import type { POJO } from '@/utilities/schemer/schemer.types'
 
 export type Entity = number
 
-export const ENGINE_COMPONENT_SCHEMA_COMPONENTS = {
+export const SYSTEM_SCHEMA_COMPONENTS = {
   tags: 'Tags',
   meta: 'Meta',
   noun: 'Noun',
@@ -14,11 +14,34 @@ export const ENGINE_COMPONENT_SCHEMA_COMPONENTS = {
 } as const
 
 export const MANDATORY_COMPONENTS = [
-  ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags,
-  ENGINE_COMPONENT_SCHEMA_COMPONENTS.meta,
+  SYSTEM_SCHEMA_COMPONENTS.tags,
+  SYSTEM_SCHEMA_COMPONENTS.meta,
 ] as const
 
 export type MandatoryComponent = (typeof MANDATORY_COMPONENTS)[number]
+
+/**
+ * In order to have the best type-safe development experience, declare the shape of
+ * the game's custom component schema by adding a d.ts file,
+ * e.g. `components.d.ts`, import `'allegoryjs'`, and declare a module with an interface called
+ * `CustomComponentSchema` with the component data shapes for the game. Then,
+ * ensure that the d.ts file is included in the game's `tsconfig.json`, typically
+ * by just `include`-ing all .ts files in the `src/` directory of the game project.
+ *
+ * @example
+ * // components.d.ts
+ * import 'allegoryjs'
+ *
+ * declare module 'allegoryjs' {
+ *   interface CustomComponentSchema {
+ *     position: { x: number; y: number }
+ *     health: { current: number; max: number }
+ *     stats: { strength: number; intelligence: number; dexterity: number }
+ *     nested: { a: { b: number } }
+ *   }
+ * }
+ */
+export interface CustomComponentSchema {}
 
 export interface EngineComponentSchema extends Record<string, POJO> {
   // all entities have this component
@@ -48,6 +71,9 @@ export interface EngineComponentSchema extends Record<string, POJO> {
   SalienceCache: SalienceCacheData & POJO
 }
 
+export type ActiveComponentSchema = EngineComponentSchema & CustomComponentSchema
+export type ComponentName = keyof ActiveComponentSchema
+
 export interface ComponentRegistrationOptions {
   /**
    * Whether the component data should be serialized when exporting ECS state.
@@ -58,51 +84,47 @@ export interface ComponentRegistrationOptions {
   serialize?: boolean
 }
 
-export interface EcsReadonlyFacade<
-  ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
-> {
+export interface EcsReadonlyFacade {
   entityExists(entity: Entity): boolean
-  entityHasComponent<ComponentName extends keyof ComponentSchema & string>(
+  entityHasComponent(
     entity: Entity,
     componentName: ComponentName,
   ): boolean
   getEntityByPrettyId(prettyId: string): Entity | undefined
-  getComponentsOnEntity(entity: Entity): Set<keyof ComponentSchema & string>
-  getEntitiesByComponents<ComponentName extends keyof ComponentSchema & string>(
+  getComponentsOnEntity(entity: Entity): Set<ComponentName>
+  getEntitiesByComponents(
     ...componentTypes: ComponentName[]
   ): Set<Entity>
-  getEntityComponentData<ComponentName extends MandatoryComponent>(
+  getEntityComponentData<Component extends MandatoryComponent>(
     entity: Entity,
-    name: ComponentName,
-  ): ComponentSchema[ComponentName]
-  getEntityComponentData<ComponentName extends keyof ComponentSchema & string>(
+    name: Component,
+  ): ActiveComponentSchema[Component]
+  getEntityComponentData<Component extends ComponentName>(
     entity: Entity,
-    name: ComponentName,
-  ): ComponentSchema[ComponentName] | undefined
+    name: Component,
+  ): ActiveComponentSchema[Component] | undefined
   getAllEntityComponentData(
     entity: Entity,
-  ): Partial<{ [K in keyof ComponentSchema & string]: ComponentSchema[K] }>
+  ): Partial<{ [K in keyof ActiveComponentSchema & string]: ActiveComponentSchema[K] }>
   getActiveEntities(): Set<Entity>
 }
 
-export interface System<ComponentSchema extends EngineComponentSchema = EngineComponentSchema> {
+export interface System {
   readonly name: string
   readonly priority?: number
 
-  run(ecs: ECS<ComponentSchema>): Promise<void>
+  run(ecs: ECS): Promise<void>
 
-  init?(ecs: ECS<ComponentSchema>): Promise<void>
-  shutdown?(ecs: ECS<ComponentSchema>): Promise<void>
+  init?(ecs: ECS): Promise<void>
+  shutdown?(ecs: ECS): Promise<void>
 }
 
-export abstract class InitializableSystem<
-  ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
-> implements System<ComponentSchema> {
+export abstract class InitializableSystem implements System {
   abstract readonly name: string
 
   private initialized = false
 
-  public async init(ecs: ECS<ComponentSchema>): Promise<void> {
+  public async init(ecs: ECS): Promise<void> {
     if (this.initialized) {
       this.logger.errorAndThrow(`Cannot initialize ${this.name} system; system already initialized`)
     }
@@ -110,7 +132,7 @@ export abstract class InitializableSystem<
     this.onInit(ecs)
   }
 
-  public async dispose(ecs: ECS<ComponentSchema>): Promise<void> {
+  public async dispose(ecs: ECS): Promise<void> {
     if (!this.initialized) {
       this.logger.errorAndThrow(`Cannot dispose of ${this.name} system; system not initialized`)
     }
@@ -118,7 +140,7 @@ export abstract class InitializableSystem<
     this.onDispose(ecs)
   }
 
-  public async run(ecs: ECS<ComponentSchema>): Promise<void> {
+  public async run(ecs: ECS): Promise<void> {
     if (!this.initialized) {
       this.logger.errorAndThrow(`Cannot run ${this.name} system; system not initialized`)
     }
@@ -127,13 +149,13 @@ export abstract class InitializableSystem<
   }
 
   protected abstract logger: Logger
-  protected abstract onInit(ecs: ECS<ComponentSchema>): Promise<void>
-  protected abstract onDispose(ecs: ECS<ComponentSchema>): Promise<void>
-  protected abstract onRun(ecs: ECS<ComponentSchema>): Promise<void>
+  protected abstract onInit(ecs: ECS): Promise<void>
+  protected abstract onDispose(ecs: ECS): Promise<void>
+  protected abstract onRun(ecs: ECS): Promise<void>
 }
 
-export interface EcsState<ComponentSchema extends EngineComponentSchema = EngineComponentSchema> {
-  [entityId: number]: EngineComponentSchema & Partial<ComponentSchema>
+export interface EcsState {
+  [entityId: number]: Partial<ActiveComponentSchema>
 }
 
 export interface EcsStateEnvelopeMeta {
@@ -143,9 +165,9 @@ export interface EcsStateEnvelopeMeta {
   savedAt: number // ms from epoch
 }
 
-export interface EcsStateEnvelope<
-  ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
-> {
+export interface EcsStateEnvelope {
   metadata: EcsStateEnvelopeMeta
-  state: EcsState<ComponentSchema>
+  state: EcsState
 }
+
+

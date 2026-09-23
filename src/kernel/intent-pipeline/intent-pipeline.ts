@@ -1,6 +1,6 @@
 import type EventBus from '@/helpers/event-bus/event-bus'
-import { defaultEmitStreams } from '@/helpers/event-bus/event-bus'
-import type { DefaultEventMap } from '@/helpers/event-bus/event-bus.types'
+import { DEFAULT_EMIT_STREAMS } from '@/helpers/event-bus/event-bus.types'
+import type { SystemEventMap } from '@/helpers/event-bus/event-bus.types'
 import type LocalizationModule from '@/helpers/localization/localization'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
@@ -37,7 +37,7 @@ import { entityHasTag } from '@/kernel/ecs/ecs.helpers'
  */
 export default class IntentPipeline<
   ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
-  EventMapType extends DefaultEventMap<ComponentSchema> = DefaultEventMap<ComponentSchema>,
+  EventMapType extends SystemEventMap<ComponentSchema> = SystemEventMap<ComponentSchema>,
 > {
   #emitter: EventBus<ComponentSchema, EventMapType>
   #config: IntentPipelineConfig
@@ -70,7 +70,7 @@ export default class IntentPipeline<
 
   async #handleUnknownCommand() {
     this.#logger.debug('issued command is unknown; emitting unknown command narration event')
-    await this.#emitter.emit(defaultEmitStreams.narrate, [this.#t('engine.unknown_command')])
+    await this.#emitter.emit(DEFAULT_EMIT_STREAMS.narrate, [this.#t('engine.unknown_command')])
   }
 
   #calculateConcernSpecificity(entity: Entity, concern: LawConcern<ComponentSchema>) {
@@ -576,7 +576,7 @@ export default class IntentPipeline<
     }
 
     for (const narration of narrations) {
-      await this.#emitter.emit(defaultEmitStreams.narrate, [this.#t(narration)])
+      await this.#emitter.emit(DEFAULT_EMIT_STREAMS.narrate, [this.#t(narration)])
     }
 
     if (!dryRun) {

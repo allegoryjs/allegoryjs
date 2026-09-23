@@ -1,7 +1,7 @@
-import { defaultEmitStreams } from '@/helpers/event-bus/event-bus'
+import { DEFAULT_EMIT_STREAMS } from '@/helpers/event-bus/event-bus.types'
 import type EventBus from '@/helpers/event-bus/event-bus'
 import type {
-  DefaultEventMap,
+  SystemEventMap,
   EcsComponentModifiedEventPayload,
   EngineEvent,
 } from '@/helpers/event-bus/event-bus.types'
@@ -9,7 +9,7 @@ import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
 import {
-  ENGINE_COMPONENT_SCHEMA_COMPONENTS,
+  SYSTEM_SCHEMA_COMPONENTS,
   type EngineComponentSchema,
   type Entity,
   InitializableSystem,
@@ -72,7 +72,7 @@ function aggregateDescriptors<ComponentSchema extends EngineComponentSchema>(
  */
 export class SemanticCacheSystem<
   ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
-  EventMapType extends DefaultEventMap<ComponentSchema> = DefaultEventMap<ComponentSchema>,
+  EventMapType extends SystemEventMap<ComponentSchema> = SystemEventMap<ComponentSchema>,
 > extends InitializableSystem<ComponentSchema> {
   #initialized = false
   #ecs: ECS<ComponentSchema>
@@ -111,14 +111,14 @@ export class SemanticCacheSystem<
     }
 
     const entitiesWithCache = this.#ecs.getEntitiesByComponents(
-      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
     )
 
     entitiesWithCache.forEach((entity) => {
       const { dirty } =
         this.#ecs.getEntityComponentData(
           entity,
-          ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+          SYSTEM_SCHEMA_COMPONENTS.semanticCache,
         ) ?? {}
 
       if (dirty) {
@@ -128,8 +128,8 @@ export class SemanticCacheSystem<
   }
 
   async onInit() {
-    this.#eventBus.subscribe(defaultEmitStreams.ecsComponentModified, this.#handleComponentModified)
-    this.#ecs.registerComponent(ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)
+    this.#eventBus.subscribe(DEFAULT_EMIT_STREAMS.ecsComponentModified, this.#handleComponentModified)
+    this.#ecs.registerComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache)
     this.#buildCache()
     this.#initialized = true
     this.logger.info('Semantic Cache System initialized; all listeners added')
@@ -137,11 +137,11 @@ export class SemanticCacheSystem<
 
   async onDispose() {
     this.#eventBus.unsubscribe(
-      defaultEmitStreams.ecsComponentModified,
+      DEFAULT_EMIT_STREAMS.ecsComponentModified,
       this.#handleComponentModified,
     )
 
-    this.#ecs.deregisterComponent(ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)
+    this.#ecs.deregisterComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache)
 
     this.logger.info(
       'Semantic Cache System disposed; all listeners unbound and cache component removed from all entities',
@@ -163,7 +163,7 @@ export class SemanticCacheSystem<
     const entitiesWithComponent = this.#ecs.getEntitiesByComponents(componentName)
 
     for (const entity of entitiesWithComponent) {
-      this.#ecs.updateComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+      this.#ecs.updateComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
         dirty: true,
       })
     }
@@ -180,11 +180,11 @@ export class SemanticCacheSystem<
     this.#resolvers.delete(componentName)
 
     const entitiesWithCache = this.#ecs.getEntitiesByComponents(
-      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
     )
 
     for (const entity of entitiesWithCache) {
-      this.#ecs.updateComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+      this.#ecs.updateComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
         dirty: true,
       })
     }
@@ -219,7 +219,7 @@ export class SemanticCacheSystem<
       `.trim(),
       )
 
-      this.#ecs.removeComponentFromEntity(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)
+      this.#ecs.removeComponentFromEntity(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
 
       return
     }
@@ -229,7 +229,7 @@ export class SemanticCacheSystem<
       (descriptor) => [descriptor, this.#vectorize(descriptor)] as [string, number[]],
     )
 
-    this.#ecs.setComponentOnEntity(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+    this.#ecs.setComponentOnEntity(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
       dirty: false,
       fullDescriptor: aggregated.combined,
       fullVector: this.#vectorize(aggregated.combined),
@@ -241,7 +241,7 @@ export class SemanticCacheSystem<
     this.logger.debug('Building semantic caches for all entities')
 
     const activeEntitiesWithCache = this.#ecs.getEntitiesByComponents(
-      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
     )
 
     for (const entity of activeEntitiesWithCache) {
@@ -252,7 +252,7 @@ export class SemanticCacheSystem<
   #handleComponentModified = ({
     payload: { entity, component },
   }: EngineEvent<EcsComponentModifiedEventPayload<ComponentSchema>>) => {
-    if (component === ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache) {
+    if (component === SYSTEM_SCHEMA_COMPONENTS.semanticCache) {
       this.logger.debug(
         `Semantic Cache system detected change in Semantic Cache component data on entity ${entity}; returning`,
       )
@@ -273,7 +273,7 @@ export class SemanticCacheSystem<
 
     const entityHasNoun = !!this.#ecs.getEntityComponentData(
       entity,
-      ENGINE_COMPONENT_SCHEMA_COMPONENTS.noun,
+      SYSTEM_SCHEMA_COMPONENTS.noun,
     )?.noun
 
     if (!entityHasNoun) {
@@ -290,7 +290,7 @@ export class SemanticCacheSystem<
 
     const cacheExists = this.#ecs.entityHasComponent(
       entity,
-      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
     )
 
     if (!cacheExists) {
@@ -300,7 +300,7 @@ export class SemanticCacheSystem<
         but no cache entry exists for the entity. Marking entity for descriptor cache generation.
       `.trim(),
       )
-      this.#ecs.setComponentOnEntity(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+      this.#ecs.setComponentOnEntity(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
         dirty: true,
       })
     } else {
@@ -310,7 +310,7 @@ export class SemanticCacheSystem<
         and a cache entry exists for the entity. Marking entity for descriptor cache regeneration.
       `.trim(),
       )
-      this.#ecs.updateComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+      this.#ecs.updateComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
         dirty: true,
       })
     }

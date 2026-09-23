@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, it, beforeEach } from 'bun:test'
 
 import EventBus from '@/helpers/event-bus/event-bus'
-import { defaultEmitStreams } from '@/helpers/event-bus/event-bus'
+import { DEFAULT_EMIT_STREAMS } from '@/helpers/event-bus/event-bus.types'
 import type LocalizationModule from '@/helpers/localization/localization'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
@@ -104,7 +104,7 @@ describe('Intent Pipeline', () => {
       expect(mockI18n.$t).toHaveBeenCalledWith('engine.unknown_command')
       expect(emitSpy).toHaveBeenCalledTimes(1)
       expect(emitSpy).toHaveBeenCalledWith(
-        defaultEmitStreams.narrate,
+        DEFAULT_EMIT_STREAMS.narrate,
         expect.arrayContaining(['correct']),
       )
     })
@@ -133,7 +133,7 @@ describe('Intent Pipeline', () => {
       expect(mockI18n.$t).toHaveBeenCalledWith('engine.unknown_command')
       expect(emitSpy).toHaveBeenCalledTimes(1)
       expect(emitSpy).toHaveBeenCalledWith(
-        defaultEmitStreams.narrate,
+        DEFAULT_EMIT_STREAMS.narrate,
         expect.arrayContaining(['correct']),
       )
 
@@ -157,7 +157,7 @@ describe('Intent Pipeline', () => {
       expect(mockI18n.$t).toHaveBeenLastCalledWith('engine.unknown_command')
       expect(emitSpy).toHaveBeenCalledTimes(2)
       expect(emitSpy).toHaveBeenLastCalledWith(
-        defaultEmitStreams.narrate,
+        DEFAULT_EMIT_STREAMS.narrate,
         expect.arrayContaining(['correct']),
       )
     })
@@ -519,7 +519,7 @@ describe('Intent Pipeline', () => {
       expect(emitSpy).not.toHaveBeenCalled()
 
       // Narrations SHOULD still be emitted
-      expect(emitSpy).toHaveBeenCalledWith(defaultEmitStreams.narrate, ['Dry run narration'])
+      expect(emitSpy).toHaveBeenCalledWith(DEFAULT_EMIT_STREAMS.narrate, ['Dry run narration'])
     })
 
     it('executes mutations and emits events when dryRun is false', async () => {
@@ -573,7 +573,7 @@ describe('Intent Pipeline', () => {
       expect(emitSpy).toHaveBeenCalledWith('TEST_EVENT', { foo: 'bar' })
 
       // Narrations SHOULD be emitted
-      expect(emitSpy).toHaveBeenCalledWith(defaultEmitStreams.narrate, ['Normal run narration'])
+      expect(emitSpy).toHaveBeenCalledWith(DEFAULT_EMIT_STREAMS.narrate, ['Normal run narration'])
     })
   })
 
@@ -842,8 +842,8 @@ describe('Intent Pipeline', () => {
 
       await ip.handleCommand('contribution test')
 
-      expect(emitSpy).toHaveBeenCalledWith(defaultEmitStreams.narrate, ['translated:narration.1'])
-      expect(emitSpy).toHaveBeenCalledWith(defaultEmitStreams.narrate, ['translated:narration.2'])
+      expect(emitSpy).toHaveBeenCalledWith(DEFAULT_EMIT_STREAMS.narrate, ['translated:narration.1'])
+      expect(emitSpy).toHaveBeenCalledWith(DEFAULT_EMIT_STREAMS.narrate, ['translated:narration.2'])
       expect(emitSpy).toHaveBeenCalledWith('CUSTOM_EVENT', { data: 'test' })
     })
   })

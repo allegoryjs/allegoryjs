@@ -1,12 +1,11 @@
 import { describe, expect, it, beforeEach } from 'bun:test'
 
-import EventBus, { WILDCARD } from '@/helpers/event-bus/event-bus'
-import type { DefaultEventMap } from '@/helpers/event-bus/event-bus.types'
+import EventBus from '@/helpers/event-bus/event-bus'
+import { WILDCARD } from './event-bus.types'
 import { DefaultLogger } from '@/helpers/logger/logger'
-import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
 
 describe('EventBus', () => {
-  let emitter: EventBus<EngineComponentSchema>
+  let emitter: EventBus
 
   beforeEach(() => {
     const logger = new DefaultLogger({
@@ -46,22 +45,20 @@ describe('EventBus', () => {
   it('delivers events to namespace listeners', async () => {
     const received: unknown[] = []
 
-    emitter.subscribe('ecsComponentModified', () => {})
-
     // We cast to any just for testing namespaces since ecs:* isn't a literal key in the schema,
     // but the type signature allows `${string}:*`
-    emitter.subscribe('ecs:*', (event) => {
+    emitter.subscribe('combat:*', (event) => {
       received.push(event.payload)
     })
 
-    await emitter.emit('ecsEntityCreated', 123)
+    await emitter.emit('combat:damage-dealt', 123)
+
+    expect(received[0]).toBe(123)
+
   })
 
   it('correctly matches colon-based namespaces', async () => {
-    const bus = new EventBus<
-      EngineComponentSchema,
-      DefaultEventMap<EngineComponentSchema> & { 'combat:damage': number }
-    >()
+    const bus = new EventBus()
     const received: number[] = []
 
     bus.subscribe('combat:*', (event) => {

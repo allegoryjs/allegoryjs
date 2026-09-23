@@ -9,7 +9,8 @@
     "allowJs": true,
     "types": ["bun"],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "allegoryjs": ["./index.ts"]
     },
 
     // Bundler mode

@@ -4,7 +4,7 @@ import EventBus from '@/helpers/event-bus/event-bus'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import ECS from '@/kernel/ecs/ecs'
 import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
-import { ENGINE_COMPONENT_SCHEMA_COMPONENTS } from '@/kernel/ecs/ecs.types'
+import { SYSTEM_SCHEMA_COMPONENTS } from '@/kernel/ecs/ecs.types'
 import { SemanticCacheSystem } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.system'
 
 interface TestSchema extends EngineComponentSchema {
@@ -42,7 +42,7 @@ describe('SemanticCacheSystem', () => {
 
     await system.onInit()
 
-    expect(ecs.isComponent(ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)).toBe(true)
+    expect(ecs.isComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache)).toBe(true)
   })
 
   test('onRun requires initialization', async () => {
@@ -66,7 +66,7 @@ describe('SemanticCacheSystem', () => {
 
     const cacheData = ecs.getEntityComponentData(
       entity,
-      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
     )
     expect(cacheData.dirty).toBe(false)
     expect(cacheData.fullDescriptor).toContain('Name is Run Test')
@@ -76,11 +76,11 @@ describe('SemanticCacheSystem', () => {
     const { ecs, system } = setup()
     await system.onInit()
 
-    expect(ecs.isComponent(ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)).toBe(true)
+    expect(ecs.isComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache)).toBe(true)
 
     await system.onDispose()
 
-    expect(ecs.isComponent(ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)).toBe(false)
+    expect(ecs.isComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache)).toBe(false)
   })
 
   test('registerResolver and deregisterResolver work as expected', async () => {
@@ -93,7 +93,7 @@ describe('SemanticCacheSystem', () => {
     ecs.setComponentOnEntity(entity, 'name', { value: 'To deregister' })
 
     // #handleComponentModified automatically set it to dirty. Let's make it not dirty
-    ecs.updateComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+    ecs.updateComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
       dirty: false,
     })
 
@@ -101,7 +101,7 @@ describe('SemanticCacheSystem', () => {
 
     const cacheData = ecs.getEntityComponentData(
       entity,
-      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
     )
     expect(cacheData.dirty).toBe(true)
   })
@@ -123,24 +123,24 @@ describe('SemanticCacheSystem', () => {
 
     ecs.setComponentOnEntity(entity, 'name', { value: 'New Name' })
 
-    expect(ecs.entityHasComponent(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)).toBe(
+    expect(ecs.entityHasComponent(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)).toBe(
       true,
     )
     const cacheData = ecs.getEntityComponentData(
       entity,
-      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
     )
     expect(cacheData.dirty).toBe(true)
 
     // Mark it not dirty to check if update makes it dirty again
-    ecs.updateComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+    ecs.updateComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
       dirty: false,
     })
 
     ecs.updateComponentData(entity, 'name', { value: 'Another Name' })
     const cacheData2 = ecs.getEntityComponentData(
       entity,
-      ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache,
+      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
     )
     expect(cacheData2.dirty).toBe(true)
   })
@@ -153,7 +153,7 @@ describe('SemanticCacheSystem', () => {
     ecs.setComponentOnEntity(entity, 'name', { value: 'Missing Resolver' })
 
     // Explicitly add the semantic cache component, pretending we want to build it
-    ecs.setComponentOnEntity(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+    ecs.setComponentOnEntity(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
       dirty: true,
       fullDescriptor: '',
       chunks: [],
@@ -162,7 +162,7 @@ describe('SemanticCacheSystem', () => {
 
     await system.onRun()
 
-    expect(ecs.entityHasComponent(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache)).toBe(
+    expect(ecs.entityHasComponent(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)).toBe(
       false,
     )
   })
@@ -172,7 +172,7 @@ describe('SemanticCacheSystem', () => {
     await system.onInit()
 
     const entity = ecs.createEntity()
-    ecs.setComponentOnEntity(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache, {
+    ecs.setComponentOnEntity(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
       dirty: true,
       fullDescriptor: '',
       chunks: [],
@@ -188,7 +188,7 @@ describe('SemanticCacheSystem', () => {
     // Mock getEntityComponentData to return dirty: true so it proceeds to #buildCacheForEntity
     const originalGetEntityComponentData = ecs.getEntityComponentData.bind(ecs)
     ecs.getEntityComponentData = mock((e: any, c: any) => {
-      if (e === entity && c === ENGINE_COMPONENT_SCHEMA_COMPONENTS.semanticCache) {
+      if (e === entity && c === SYSTEM_SCHEMA_COMPONENTS.semanticCache) {
         return { dirty: true }
       }
       return originalGetEntityComponentData(e, c)

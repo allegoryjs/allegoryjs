@@ -1,22 +1,21 @@
 import type ECS from '@/kernel/ecs/ecs'
 import {
-  ENGINE_COMPONENT_SCHEMA_COMPONENTS,
+  SYSTEM_SCHEMA_COMPONENTS,
   type EcsReadonlyFacade,
   type EcsState,
   type EcsStateEnvelope,
   type EcsStateEnvelopeMeta,
-  type EngineComponentSchema,
   type Entity,
 } from '@/kernel/ecs/ecs.types'
 import { isPojo, isPositiveInteger, isString } from '@/utilities/schemer'
 
-export function entityHasTag<ComponentSchema extends EngineComponentSchema = EngineComponentSchema>(
-  ecs: EcsReadonlyFacade<ComponentSchema> | ECS<ComponentSchema>,
+export function entityHasTag(
+  ecs: EcsReadonlyFacade | ECS,
   entity: Entity,
   tag: string,
 ) {
   return ecs
-    .getEntityComponentData(entity, ENGINE_COMPONENT_SCHEMA_COMPONENTS.tags)
+    .getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.tags)
     .list.includes(tag)
 }
 
@@ -31,9 +30,9 @@ function validateMetadata(obj: unknown): obj is EcsStateEnvelopeMeta {
   )
 }
 
-function validateState<ComponentSchema extends EngineComponentSchema = EngineComponentSchema>(
+function validateState(
   obj: unknown,
-): obj is EcsState<ComponentSchema> {
+): obj is EcsState {
   if (!isPojo(obj)) {
     return false
   }
@@ -51,9 +50,7 @@ function validateState<ComponentSchema extends EngineComponentSchema = EngineCom
   })
 }
 
-export function parseStateJson<
-  ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
->(stateString: string): EcsStateEnvelope<ComponentSchema> {
+export function parseStateJson(stateString: string): EcsStateEnvelope {
   const { metadata, state } = JSON.parse(stateString)
 
   const isValidPojo = isPojo(metadata) && isPojo(state)
@@ -68,7 +65,7 @@ export function parseStateJson<
     throw new Error('Fatal error parsing ECS state: invalid metadata')
   }
 
-  const dataShapeIsValid = validateState<ComponentSchema>(state)
+  const dataShapeIsValid = validateState(state)
 
   if (!dataShapeIsValid) {
     throw new Error('Fatal error parsing state string: component data objects must be POJOs')
@@ -77,5 +74,5 @@ export function parseStateJson<
   return {
     metadata,
     state,
-  } as EcsStateEnvelope<ComponentSchema>
+  } as EcsStateEnvelope
 }

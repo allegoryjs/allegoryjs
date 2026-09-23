@@ -1,29 +1,17 @@
 import type {
-  DefaultEventMap,
   Listener,
   EventBusConfig,
   Disposer,
   EngineEvent,
-  EventMapSchema,
+  EmitStream,
+  EventPayload,
 } from '@/helpers/event-bus/event-bus.types'
-import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
-import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
 
-export const defaultEmitStreams = {
-  narrate: 'narrate',
-  ecsComponentModified: 'ecsComponentModified',
-  ecsEntityCreated: 'ecsEntityCreated',
-  ecsEntityDestroyed: 'ecsEntityDestroyed',
-  semanticCacheUpdated: 'semanticCacheUpdated',
-} as const
+import { DefaultLogger } from '@/helpers/logger/logger'
+import { WILDCARD } from './event-bus.types'
 
-export const WILDCARD = '*'
-
-export default class EventBus<
-  ComponentSchema extends EngineComponentSchema,
-  EventMapType extends EventMapSchema = DefaultEventMap<ComponentSchema>,
-> {
+export default class EventBus {
   #listeners = new Map<string, Set<Listener<any>>>()
   #logger: Logger
   #debug: boolean
@@ -33,17 +21,15 @@ export default class EventBus<
     this.#debug = config?.debug ?? false
   }
 
-  subscribe<K extends keyof EventMapType & string>(
-    stream: K,
-    cb: Listener<EventMapType[K]>,
+  subscribe<Stream extends EmitStream>(
+    stream: Stream,
+    cb: Listener<Stream>,
   ): Disposer
   subscribe(stream: typeof WILDCARD | `${string}:*`, cb: Listener<any>): Disposer
   subscribe(stream: string, cb: Listener<any>): Disposer {
-    if (!this.#listeners.has(stream)) {
-      this.#listeners.set(stream, new Set())
-    }
+    const listeners = this.#listeners.getOrInsert(stream, new Set())
 
-    this.#listeners.get(stream)!.add(cb)
+    listeners.add(cb)
 
     if (this.#debug) {
       this.#logger.debug(`[EventBus] Subscribed to ${stream}`)
@@ -73,11 +59,11 @@ export default class EventBus<
     }
   }
 
-  async emit<K extends keyof EventMapType & string>(
-    stream: K,
-    payload: EventMapType[K],
+  async emit<Stream extends EmitStream>(
+    stream: Stream,
+    payload: EventPayload<Stream>,
   ): Promise<void> {
-    const event: EngineEvent<EventMapType[K]> = {
+    const event: EngineEvent<Stream> = {
       timestamp: Date.now(),
       payload,
     }
