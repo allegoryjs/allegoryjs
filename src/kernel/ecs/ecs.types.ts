@@ -9,6 +9,7 @@ declare global {
 }
 
 export type Entity = number
+export type Revision = number
 
 export const SYSTEM_SCHEMA_COMPONENTS = {
   tags: 'Tags',
@@ -106,6 +107,7 @@ export interface EcsReadonlyFacade {
     entity: Entity,
   ): Partial<{ [K in keyof ActiveComponentSchema & string]: ActiveComponentSchema[K] }>
   getActiveEntities(): Set<Entity>
+  getEntityComponentRevision(entity: Entity, component: ComponentName): Revision
 }
 
 export interface System {

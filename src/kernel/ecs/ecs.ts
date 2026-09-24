@@ -1,5 +1,3 @@
-import type EventBus from '@/helpers/event-bus/event-bus'
-import { DEFAULT_EMIT_STREAMS } from '@/helpers/event-bus/event-bus.types'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 import { parseStateJson } from '@/kernel/ecs/ecs.helpers'
@@ -16,26 +14,27 @@ import {
   type MandatoryComponent,
   type ComponentName,
   type ActiveComponentSchema,
+  type Revision,
 } from '@/kernel/ecs/ecs.types'
 import deepFreeze from '@/utilities/deep-freeze'
 import type { POJO } from '@/utilities/schemer/schemer.types'
 
 export default class ECS {
   #nextEntityId = 1
+  #revision = 0
   #activeEntities = new Set<number>()
   #components = new Map<ComponentName, Map<Entity, ActiveComponentSchema[ComponentName]>>()
+  #entityRevisions = new Map<Entity, Map<ComponentName, Revision>>()
   #prettyIdMap = new Map<string, Entity>()
   #nonSerializedComponents = new Set<ComponentName>()
 
   #systems = new Map<string, System>()
   #logger: Logger
-  #eventBus: EventBus
   #defaultSystemPriority: number
   #readonlyFacade: EcsReadonlyFacade | undefined
 
-  constructor(eventBus: EventBus, logger?: Logger, defaultSystemPriority = 50) {
+  constructor(logger?: Logger, defaultSystemPriority = 50) {
     this.#logger = logger ?? new DefaultLogger()
-    this.#eventBus = eventBus
 
     // Bootstrap required system components
     this.#components.set(SYSTEM_SCHEMA_COMPONENTS.tags, new Map())
@@ -76,6 +75,10 @@ export default class ECS {
     return this.#readonlyFacade
   }
 
+  get currentRevision(): Revision {
+    return this.#revision
+  }
+
   #assertEntityExists(entity: Entity, entityOperation: string) {
     if (!this.#activeEntities.has(entity)) {
       if (entity < 1 || entity >= this.#nextEntityId) {
@@ -86,6 +89,22 @@ export default class ECS {
       const err = `Can't ${entityOperation} entity ${entity}; entity is destroyed`
       this.#logger.errorAndThrow(err)
     }
+  }
+
+  #incrementRevision(): void
+  #incrementRevision(entity: Entity, component: ComponentName): void
+  #incrementRevision(entity?: Entity, component?: ComponentName) {
+    this.#revision++
+
+    if (typeof entity === 'undefined' || typeof component === 'undefined') {
+      return
+    }
+
+    const componentRevisionsMap = this.#entityRevisions.getOrInsert(entity, new Map())
+    componentRevisionsMap.set(component, this.#revision)
+
+    this.#logger.debug(`Incrementing ECS revision to ${this.#revision}`)
+    this.#logger.silly`Updated entity ${entity} -> component ${component} last modified revision version to ${this.#revision}`
   }
 
   loadSerializedState(
@@ -216,6 +235,12 @@ export default class ECS {
       this.#logger.debug(`Set noun ${noun} on entity ${id}`)
     }
 
+    const componentRevisionsMap = this.#entityRevisions.getOrInsert(id, new Map())
+
+    for (const component in this.#components.keys()) {
+      componentRevisionsMap.set(component as ComponentName, this.#revision)
+    }
+
     this.#logger.info(`Entity ${id} created (metaId: "${metaIdToSet}")`)
 
     return id
@@ -271,7 +296,7 @@ export default class ECS {
     this.#logger.debug(`Set component "${name}" data on entity ${entity}`)
     this.#logger.silly`Set component "${name}" data on entity ${entity}: ${data}`
 
-    this.#eventBus.emit(DEFAULT_EMIT_STREAMS.ecsComponentModified, { entity, component: name })
+    this.#incrementRevision(entity, name)
   }
 
   // merge component data with new data
@@ -311,7 +336,7 @@ export default class ECS {
       ...data,
     })
 
-    this.#eventBus.emit(DEFAULT_EMIT_STREAMS.ecsComponentModified, { entity, component: name })
+    this.#incrementRevision(entity, name)
   }
 
   removeComponentFromEntity<Component extends ComponentName>(
@@ -335,11 +360,10 @@ export default class ECS {
     }
 
     store.delete(entity)
-    this.#eventBus.emit(DEFAULT_EMIT_STREAMS.ecsComponentModified, {
-      entity,
-      component: componentType,
-    })
+    this.#entityRevisions.delete(entity)
+    this.#incrementRevision()
     this.#logger.debug(`Removed component "${componentType}" from entity ${entity}`)
+
   }
 
   getAllEntityComponentData(entity: Entity): Partial<{
@@ -488,10 +512,35 @@ export default class ECS {
   entityExists(id: number) {
     const result = this.#activeEntities.has(id)
     this.#logger.debug(`entityExists(${id}): ${result}`)
+
     return result
   }
 
   getActiveEntities() {
+    this.#logger.silly`Active entities: ${this.#activeEntities}`
+
     return structuredClone(this.#activeEntities)
+  }
+
+  getEntityComponentRevision(entity: Entity, component: ComponentName): Revision {
+    this.#assertEntityExists(entity, 'get component revision')
+
+    if (!this.entityHasComponent(entity, component)) {
+      this.#logger.errorAndThrow(`Attempted to get revision version for entity ${entity} -> component ${component}, but entity does not have component`)
+    }
+
+    const componentRevisionsMap = this.#entityRevisions.get(entity)
+
+    if (!componentRevisionsMap) {
+      this.#logger.errorAndThrow(`Attempted to get revision version for entity ${entity} -> component ${component}, but entity does not exist in the revisions map. This is likely an internal engine bug.`)
+    }
+
+    const revision = componentRevisionsMap.get(component)
+
+    if (typeof revision === 'undefined') {
+      this.#logger.errorAndThrow(`Attempted to get revision version for entity ${entity} -> component ${component}, but component does not exist in the entity's entry in the revisions map. This is likely an internal engine bug.`)
+    }
+
+    return revision
   }
 }

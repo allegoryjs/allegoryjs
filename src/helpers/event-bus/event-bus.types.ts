@@ -1,5 +1,5 @@
 import type { Logger } from '@/helpers/logger/logger.types'
-import type { ComponentName, Entity } from '@/kernel/ecs/ecs.types'
+import type { Entity } from '@/kernel/ecs/ecs.types'
 
 declare global {
   interface AllegoryCustomEventMap {}
@@ -9,7 +9,6 @@ export const WILDCARD = '*'
 
 export const DEFAULT_EMIT_STREAMS = {
   narrate: 'narrate',
-  ecsComponentModified: 'ecsComponentModified',
   semanticCacheUpdated: 'semanticCacheUpdated',
 } as const
 
@@ -38,18 +37,12 @@ export type CustomEventMap = AllegoryCustomEventMap
 
 export interface SystemEventMap {
   [DEFAULT_EMIT_STREAMS.narrate]: string[]
-  [DEFAULT_EMIT_STREAMS.ecsComponentModified]: EcsComponentModifiedEventPayload
   [DEFAULT_EMIT_STREAMS.semanticCacheUpdated]: Entity
 }
 
 export type ActiveEventMap = CustomEventMap & SystemEventMap
 export type EmitStream = keyof ActiveEventMap
 export type EventPayload<Stream extends EmitStream> = ActiveEventMap[Stream]
-
-export interface EcsComponentModifiedEventPayload {
-  entity: Entity
-  component: ComponentName
-}
 
 export interface EngineEvent<Stream extends EmitStream> {
   timestamp: number
