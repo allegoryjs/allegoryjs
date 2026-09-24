@@ -43,7 +43,7 @@ export type MandatoryComponent = (typeof MANDATORY_COMPONENTS)[number]
  */
 export interface CustomComponentSchema {}
 
-export interface EngineComponentSchema extends Record<string, POJO> {
+export interface EngineComponentSchema {
   // all entities have this component
   Tags: {
     list: Array<string>

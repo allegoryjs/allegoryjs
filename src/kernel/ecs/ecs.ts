@@ -23,10 +23,7 @@ import type { POJO } from '@/utilities/schemer/schemer.types'
 export default class ECS {
   #nextEntityId = 1
   #activeEntities = new Set<number>()
-  #components = new Map<
-    ComponentName,
-    Map<Entity, ActiveComponentSchema[ComponentName]>
-  >()
+  #components = new Map<ComponentName, Map<Entity, ActiveComponentSchema[ComponentName]>>()
   #prettyIdMap = new Map<string, Entity>()
   #nonSerializedComponents = new Set<ComponentName>()
 
@@ -36,11 +33,7 @@ export default class ECS {
   #defaultSystemPriority: number
   #readonlyFacade: EcsReadonlyFacade | undefined
 
-  constructor(
-    eventBus: EventBus,
-    logger?: Logger,
-    defaultSystemPriority = 50,
-  ) {
+  constructor(eventBus: EventBus, logger?: Logger, defaultSystemPriority = 50) {
     this.#logger = logger ?? new DefaultLogger()
     this.#eventBus = eventBus
 
@@ -115,7 +108,8 @@ export default class ECS {
 
     for (const [entityString, entityComponents] of Object.entries(state)) {
       const entityId = Number(entityString)
-      const entityComponentsTyped = entityComponents as EngineComponentSchema & Partial<ActiveComponentSchema>
+      const entityComponentsTyped = entityComponents as EngineComponentSchema &
+        Partial<ActiveComponentSchema>
 
       activeEntities.push(entityId)
       if (nextEntityId <= entityId) nextEntityId = entityId + 1
@@ -123,7 +117,7 @@ export default class ECS {
       prettyIdMap.set(entityComponentsTyped.Meta.id, entityId)
 
       for (const [componentName, componentData] of Object.entries(entityComponentsTyped)) {
-        const componentMap = components.getOrInsert(componentName, new Map())
+        const componentMap = components.getOrInsert(componentName as ComponentName, new Map())
         componentMap.set(entityId, componentData)
       }
     }
@@ -161,7 +155,7 @@ export default class ECS {
   }
 
   isComponent(name: string): name is ComponentName {
-    const result = this.#components.has(name)
+    const result = this.#components.has(name as ComponentName)
     this.#logger.debug(`isComponent("${name}"): ${result}`)
     return result
   }
@@ -349,18 +343,23 @@ export default class ECS {
   }
 
   getAllEntityComponentData(entity: Entity): Partial<{
-    [Component in keyof ActiveComponentSchema & string]: ActiveComponentSchema[Component]
+    [Component in ComponentName]: ActiveComponentSchema[Component]
   }> {
     this.#assertEntityExists(entity, 'get component data for')
 
-    const data: Partial<{
-      [Component in keyof ActiveComponentSchema & string]: ActiveComponentSchema[Component]
-    }> = {}
+    const data: Partial<ActiveComponentSchema> = {}
 
     const components = this.getComponentsOnEntity(entity)
 
+    const setComponent = <C extends ComponentName>(
+      component: C,
+      value: ActiveComponentSchema[C] | undefined,
+    ) => {
+      data[component] = value
+    }
+
     components.forEach((component) => {
-      data[component] = this.getEntityComponentData(entity, component)
+      setComponent(component, this.getEntityComponentData(entity, component))
     })
 
     return data
@@ -393,10 +392,7 @@ export default class ECS {
     return structuredClone(componentData as ActiveComponentSchema[Component])
   }
 
-  entityHasComponent(
-    entity: Entity,
-    componentType: ComponentName,
-  ): boolean {
+  entityHasComponent(entity: Entity, componentType: ComponentName): boolean {
     this.#assertEntityExists(entity, 'check for component presence on')
 
     const component = this.#components.get(componentType)
@@ -414,17 +410,13 @@ export default class ECS {
     this.#assertEntityExists(entity, 'get components on')
 
     const components = Array.from(this.#components).flatMap(([componentName]) =>
-      this.entityHasComponent(entity, componentName)
-        ? [componentName]
-        : [],
+      this.entityHasComponent(entity, componentName) ? [componentName] : [],
     )
     this.#logger.debug(`Components on entity ${entity}: [${components.join(', ')}]`)
     return new Set(components)
   }
 
-  getEntitiesByComponents(
-    ...componentTypes: ComponentName[]
-  ): Set<Entity> {
+  getEntitiesByComponents(...componentTypes: ComponentName[]): Set<Entity> {
     if (componentTypes.length === 0) return new Set()
 
     this.#logger.debug(`Querying entities by components: [${componentTypes.join(', ')}]`)
@@ -468,10 +460,7 @@ export default class ECS {
   destroyEntity(entity: Entity) {
     this.#assertEntityExists(entity, 'destroy')
 
-    const prettyId = this.getEntityComponentData(
-      entity,
-      SYSTEM_SCHEMA_COMPONENTS.meta,
-    )?.id
+    const prettyId = this.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.meta)?.id
 
     if (!prettyId) {
       const err = `Critical error: Attempting to destroy entity ${entity}, but it has no pretty ID. All entities must have the Meta component and a pretty ID.`
