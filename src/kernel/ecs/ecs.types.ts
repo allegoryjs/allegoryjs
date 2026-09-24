@@ -4,6 +4,10 @@ import type { SalienceCacheData } from '@/kernel/ecs/systems/salience/salience.t
 import type { SemanticCacheData } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.types'
 import type { POJO } from '@/utilities/schemer/schemer.types'
 
+declare global {
+  interface AllegoryCustomComponentSchema {}
+}
+
 export type Entity = number
 
 export const SYSTEM_SCHEMA_COMPONENTS = {
@@ -41,7 +45,7 @@ export type MandatoryComponent = (typeof MANDATORY_COMPONENTS)[number]
  *   }
  * }
  */
-export interface CustomComponentSchema {}
+export type CustomComponentSchema = AllegoryCustomComponentSchema
 
 export interface EngineComponentSchema {
   // all entities have this component

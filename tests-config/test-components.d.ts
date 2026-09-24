@@ -1,9 +1,9 @@
 import type { Entity } from '@/kernel/ecs/ecs.types'
 
-declare module 'allegoryjs' {
-  interface CustomComponentSchema {
+declare global {
+  interface AllegoryCustomComponentSchema {
     position: { x: number; y: number }
-    // velocity: { x: number; y: number }
+    velocity: { x: number; y: number }
     health: { current: number; max: number }
     stats: { strength: number; intelligence: number; dexterity: number }
     label: { text: string }
@@ -20,3 +20,6 @@ declare module 'allegoryjs' {
     TestComponent: { value: number }
   }
 }
+
+// oxlint-disable-next-line unicorn/require-module-specifiers
+export {}

@@ -1,6 +1,10 @@
 import type { Logger } from '@/helpers/logger/logger.types'
 import type { ComponentName, Entity } from '@/kernel/ecs/ecs.types'
 
+declare global {
+  interface AllegoryCustomEventMap { }
+}
+
 export const WILDCARD = '*'
 
 export const DEFAULT_EMIT_STREAMS = {
@@ -30,7 +34,7 @@ export type SystemEmitStream = typeof DEFAULT_EMIT_STREAMS[keyof typeof DEFAULT_
  *   }
  * }
  */
-export interface CustomEventMap {}
+export type CustomEventMap = AllegoryCustomEventMap
 
 export interface SystemEventMap {
   [DEFAULT_EMIT_STREAMS.narrate]: string[]
