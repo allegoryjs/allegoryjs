@@ -90,15 +90,10 @@ export interface ComponentRegistrationOptions {
 
 export interface EcsReadonlyFacade {
   entityExists(entity: Entity): boolean
-  entityHasComponent(
-    entity: Entity,
-    componentName: ComponentName,
-  ): boolean
+  entityHasComponent(entity: Entity, componentName: ComponentName): boolean
   getEntityByPrettyId(prettyId: string): Entity | undefined
   getComponentsOnEntity(entity: Entity): Set<ComponentName>
-  getEntitiesByComponents(
-    ...componentTypes: ComponentName[]
-  ): Set<Entity>
+  getEntitiesByComponents(...componentTypes: ComponentName[]): Set<Entity>
   getEntityComponentData<Component extends MandatoryComponent>(
     entity: Entity,
     name: Component,
@@ -173,5 +168,3 @@ export interface EcsStateEnvelope {
   metadata: EcsStateEnvelopeMeta
   state: EcsState
 }
-
-

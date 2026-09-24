@@ -173,7 +173,5 @@ export class IntentClassifier<ComponentSchema extends EngineComponentSchema> {
 
   async #matchEntities(subject: string): Promise<Set<Entity>> {
     this.#assertReady()
-
-
   }
 }

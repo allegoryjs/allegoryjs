@@ -268,7 +268,8 @@ export default class ECS {
     this.#assertEntityExists(entity, 'set component on')
 
     store.set(entity, structuredClone(data))
-    this.#logger.debug(`Set component "${name}" data on entity ${entity}: ${JSON.stringify(data)}`)
+    this.#logger.debug(`Set component "${name}" data on entity ${entity}`)
+    this.#logger.silly`Set component "${name}" data on entity ${entity}: ${data}`
 
     this.#eventBus.emit(DEFAULT_EMIT_STREAMS.ecsComponentModified, { entity, component: name })
   }
@@ -302,9 +303,8 @@ export default class ECS {
       this.#logger.errorAndThrow(err)
     }
 
-    this.#logger.debug(
-      `Merging component "${name}" data on entity ${entity}: ${JSON.stringify(data)}`,
-    )
+    this.#logger.debug(`Merging component "${name}" data on entity ${entity}`)
+    this.#logger.silly`Merging component "${name}" data on entity ${entity}: ${data}`
 
     store.set(entity, {
       ...existingComponentData,
@@ -388,6 +388,7 @@ export default class ECS {
     }
 
     this.#logger.debug(`Retrieved component "${name}" data for entity ${entity}`)
+    this.#logger.silly`Retrieved component "${name}" data for entity ${entity}: ${componentData}`
 
     return structuredClone(componentData as ActiveComponentSchema[Component])
   }

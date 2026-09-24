@@ -64,10 +64,7 @@ describe('SemanticCacheSystem', () => {
 
     await system.onRun()
 
-    const cacheData = ecs.getEntityComponentData(
-      entity,
-      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
-    )
+    const cacheData = ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
     expect(cacheData.dirty).toBe(false)
     expect(cacheData.fullDescriptor).toContain('Name is Run Test')
   })
@@ -99,10 +96,7 @@ describe('SemanticCacheSystem', () => {
 
     system.deregisterResolver('name')
 
-    const cacheData = ecs.getEntityComponentData(
-      entity,
-      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
-    )
+    const cacheData = ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
     expect(cacheData.dirty).toBe(true)
   })
 
@@ -123,13 +117,8 @@ describe('SemanticCacheSystem', () => {
 
     ecs.setComponentOnEntity(entity, 'name', { value: 'New Name' })
 
-    expect(ecs.entityHasComponent(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)).toBe(
-      true,
-    )
-    const cacheData = ecs.getEntityComponentData(
-      entity,
-      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
-    )
+    expect(ecs.entityHasComponent(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)).toBe(true)
+    const cacheData = ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
     expect(cacheData.dirty).toBe(true)
 
     // Mark it not dirty to check if update makes it dirty again
@@ -138,10 +127,7 @@ describe('SemanticCacheSystem', () => {
     })
 
     ecs.updateComponentData(entity, 'name', { value: 'Another Name' })
-    const cacheData2 = ecs.getEntityComponentData(
-      entity,
-      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
-    )
+    const cacheData2 = ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
     expect(cacheData2.dirty).toBe(true)
   })
 
@@ -162,9 +148,7 @@ describe('SemanticCacheSystem', () => {
 
     await system.onRun()
 
-    expect(ecs.entityHasComponent(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)).toBe(
-      false,
-    )
+    expect(ecs.entityHasComponent(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)).toBe(false)
   })
 
   test('buildCache throws error if entity does not exist', async () => {

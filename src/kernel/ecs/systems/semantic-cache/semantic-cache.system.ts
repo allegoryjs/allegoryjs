@@ -1,5 +1,5 @@
-import { DEFAULT_EMIT_STREAMS } from '@/helpers/event-bus/event-bus.types'
 import type EventBus from '@/helpers/event-bus/event-bus'
+import { DEFAULT_EMIT_STREAMS } from '@/helpers/event-bus/event-bus.types'
 import type {
   SystemEventMap,
   EcsComponentModifiedEventPayload,
@@ -116,10 +116,7 @@ export class SemanticCacheSystem<
 
     entitiesWithCache.forEach((entity) => {
       const { dirty } =
-        this.#ecs.getEntityComponentData(
-          entity,
-          SYSTEM_SCHEMA_COMPONENTS.semanticCache,
-        ) ?? {}
+        this.#ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache) ?? {}
 
       if (dirty) {
         this.#buildCacheForEntity(entity)
@@ -128,7 +125,10 @@ export class SemanticCacheSystem<
   }
 
   async onInit() {
-    this.#eventBus.subscribe(DEFAULT_EMIT_STREAMS.ecsComponentModified, this.#handleComponentModified)
+    this.#eventBus.subscribe(
+      DEFAULT_EMIT_STREAMS.ecsComponentModified,
+      this.#handleComponentModified,
+    )
     this.#ecs.registerComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache)
     this.#buildCache()
     this.#initialized = true
@@ -235,6 +235,9 @@ export class SemanticCacheSystem<
       fullVector: this.#vectorize(aggregated.combined),
       chunks,
     })
+
+    this.logger.debug(`Built semantic cache for entity ${entity}`)
+    this.logger.silly`Semantic cache for entity ${entity}: ${aggregated}`
   }
 
   #buildCache() {
@@ -271,10 +274,8 @@ export class SemanticCacheSystem<
       return
     }
 
-    const entityHasNoun = !!this.#ecs.getEntityComponentData(
-      entity,
-      SYSTEM_SCHEMA_COMPONENTS.noun,
-    )?.noun
+    const entityHasNoun = !!this.#ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.noun)
+      ?.noun
 
     if (!entityHasNoun) {
       this.logger.debug(
@@ -288,10 +289,7 @@ export class SemanticCacheSystem<
       return
     }
 
-    const cacheExists = this.#ecs.entityHasComponent(
-      entity,
-      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
-    )
+    const cacheExists = this.#ecs.entityHasComponent(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
 
     if (!cacheExists) {
       this.logger.debug(

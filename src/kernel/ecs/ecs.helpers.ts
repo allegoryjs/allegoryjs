@@ -9,14 +9,8 @@ import {
 } from '@/kernel/ecs/ecs.types'
 import { isPojo, isPositiveInteger, isString } from '@/utilities/schemer'
 
-export function entityHasTag(
-  ecs: EcsReadonlyFacade | ECS,
-  entity: Entity,
-  tag: string,
-) {
-  return ecs
-    .getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.tags)
-    .list.includes(tag)
+export function entityHasTag(ecs: EcsReadonlyFacade | ECS, entity: Entity, tag: string) {
+  return ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.tags).list.includes(tag)
 }
 
 function validateMetadata(obj: unknown): obj is EcsStateEnvelopeMeta {
@@ -30,9 +24,7 @@ function validateMetadata(obj: unknown): obj is EcsStateEnvelopeMeta {
   )
 }
 
-function validateState(
-  obj: unknown,
-): obj is EcsState {
+function validateState(obj: unknown): obj is EcsState {
   if (!isPojo(obj)) {
     return false
   }

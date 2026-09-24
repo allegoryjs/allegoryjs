@@ -6,9 +6,9 @@ import type {
   EmitStream,
   EventPayload,
 } from '@/helpers/event-bus/event-bus.types'
+import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 
-import { DefaultLogger } from '@/helpers/logger/logger'
 import { WILDCARD } from './event-bus.types'
 
 export default class EventBus {
@@ -21,10 +21,7 @@ export default class EventBus {
     this.#debug = config?.debug ?? false
   }
 
-  subscribe<Stream extends EmitStream>(
-    stream: Stream,
-    cb: Listener<Stream>,
-  ): Disposer
+  subscribe<Stream extends EmitStream>(stream: Stream, cb: Listener<Stream>): Disposer
   subscribe(stream: typeof WILDCARD | `${string}:*`, cb: Listener<any>): Disposer
   subscribe(stream: string, cb: Listener<any>): Disposer {
     const listeners = this.#listeners.getOrInsert(stream, new Set())
@@ -69,10 +66,8 @@ export default class EventBus {
     }
 
     if (this.#debug) {
-      this.#logger.debug(
-        `[EventBus] Emitted ${stream} at ${event.timestamp} with payload:`,
-        event.payload,
-      )
+      this.#logger.debug(`[EventBus] Emitted ${stream} at ${event.timestamp}`)
+      this.#logger.silly`[EventBus] Payload for ${stream}: ${event.payload}`
     }
 
     const listenersToInvoke = new Set<Listener<any>>()

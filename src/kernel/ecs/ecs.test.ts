@@ -1,11 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 
+import EventBus from '@/helpers/event-bus/event-bus'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import ECS from '@/kernel/ecs/ecs'
 import { entityHasTag, parseStateJson } from '@/kernel/ecs/ecs.helpers'
-
-
-import EventBus from '@/helpers/event-bus/event-bus'
 
 function makeECS() {
   const logger = new DefaultLogger({

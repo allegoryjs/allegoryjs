@@ -5,6 +5,7 @@ import type LocalizationModule from '@/helpers/localization/localization'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
+import { entityHasTag } from '@/kernel/ecs/ecs.helpers'
 import type { EngineComponentSchema, Entity, EcsReadonlyFacade } from '@/kernel/ecs/ecs.types'
 import {
   ContributionStatus,
@@ -23,8 +24,6 @@ import type {
 } from '@/kernel/intent-pipeline/intent-pipeline.types'
 
 import type { IntentClassificationModule } from '../../nlp/intent-classifier/intent-classifier.types'
-
-import { entityHasTag } from '@/kernel/ecs/ecs.helpers'
 
 /**
  * @class IntentPipeline
@@ -74,9 +73,8 @@ export default class IntentPipeline<
   }
 
   #calculateConcernSpecificity(entity: Entity, concern: LawConcern<ComponentSchema>) {
-    this.#logger.debug(
-      `Calculating concern specificity for entity ${entity} and concern ${JSON.stringify(concern)}`,
-    )
+    this.#logger.debug(`Calculating concern specificity for entity ${entity}`)
+    this.#logger.silly`Concern for entity ${entity}: ${concern}`
 
     const idScore =
       concern?.ids?.reduce((acc: number, id: number | string) => {
@@ -499,9 +497,9 @@ export default class IntentPipeline<
     }
 
     if (mutation.op === LawMutationOpType.set) {
-      this.#logger.debug(
-        `Setting component data for ${mutation.component} on entity ${entity}:\n${JSON.stringify(mutation.value)}`,
-      )
+      this.#logger.debug(`Setting component data for ${mutation.component} on entity ${entity}`)
+      this.#logger
+        .silly`Setting component data for ${mutation.component} on entity ${entity}: ${mutation.value}`
 
       this.#ecs.setComponentOnEntity(
         entity,
@@ -512,9 +510,9 @@ export default class IntentPipeline<
     }
 
     if (mutation.op === LawMutationOpType.update) {
-      this.#logger.debug(
-        `Updating component data for ${mutation.component} on entity ${entity}:\n${JSON.stringify(mutation.value)}`,
-      )
+      this.#logger.debug(`Updating component data for ${mutation.component} on entity ${entity}`)
+      this.#logger
+        .silly`Updating component data for ${mutation.component} on entity ${entity}: ${mutation.value}`
 
       this.#ecs.updateComponentData(
         entity,
@@ -552,6 +550,7 @@ export default class IntentPipeline<
         this.#logger.debug(
           `${contribution?.mutations?.length} mutation contribution(s) added to stack`,
         )
+        this.#logger.silly`Mutation contribution(s) added: ${contribution.mutations}`
 
         mutations.push(...contribution.mutations)
       }
@@ -566,6 +565,7 @@ export default class IntentPipeline<
 
       if (contribution?.events?.length) {
         this.#logger.debug(`${contribution?.events?.length} event contribution(s) added to stack`)
+        this.#logger.silly`Event contribution(s) added: ${contribution.events}`
 
         events.push(...contribution.events)
       }
@@ -582,6 +582,7 @@ export default class IntentPipeline<
     if (!dryRun) {
       for (const event of events) {
         this.#logger.debug(`Emitting event of type ${event.type}`)
+        this.#logger.silly`Payload for event ${event.type}: ${event.payload}`
 
         await this.#emitter.emit(event.type, event.payload)
       }

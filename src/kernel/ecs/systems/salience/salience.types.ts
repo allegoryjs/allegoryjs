@@ -29,9 +29,7 @@ export const SalienceScore = {
   zero: 0.0,
 } as const
 
-export interface SalienceVote {
-
-}
+export interface SalienceVote {}
 
 export interface SalienceVoter extends System {
   voteSalience(): SalienceVote

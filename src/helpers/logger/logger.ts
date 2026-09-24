@@ -104,6 +104,13 @@ export class DefaultLogger implements Logger {
     console.warn('[WARN]', ...args)
   }
 
+  /**
+   * Typically called as a tagged template, so objects can be automatically printed in a useful way.
+   * If called this way, objects should not be stringified-- they will be pretty printed automatically
+   *
+   * @example
+   * logger.silly`Setting component data for entity ${entity} component ${component} to ${componentDataObj}`
+   */
   silly(stringsOrMessage: TemplateStringsArray | string, ...values: any[]) {
     if (!this.#enableSilly) {
       return

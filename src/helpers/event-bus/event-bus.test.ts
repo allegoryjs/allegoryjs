@@ -1,8 +1,9 @@
 import { describe, expect, it, beforeEach } from 'bun:test'
 
 import EventBus from '@/helpers/event-bus/event-bus'
-import { WILDCARD } from './event-bus.types'
 import { DefaultLogger } from '@/helpers/logger/logger'
+
+import { WILDCARD } from './event-bus.types'
 
 describe('EventBus', () => {
   let emitter: EventBus
@@ -54,7 +55,6 @@ describe('EventBus', () => {
     await emitter.emit('combat:damage-dealt', 123)
 
     expect(received[0]).toBe(123)
-
   })
 
   it('correctly matches colon-based namespaces', async () => {

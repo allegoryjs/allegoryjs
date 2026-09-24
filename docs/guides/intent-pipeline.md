@@ -34,6 +34,7 @@ With this extra information, the game engine has all it needs to proceed with ma
 At the core of the intent pipeline is the concept of **Laws**. A Law is a pluggable encapsulation of a game system—things like combat, inventory, perception, and NPC dialogues are all made possible through Laws. A Law is essentially a container for an intent handler with some metadata that describe when and why it should be invoked. Here's what a Law looks like:
 
 eztodo update this with component schema changes
+
 ```ts
 interface Law<ComponentSchema extends EngineComponentSchema> {
   layer: LawLayer

@@ -2,7 +2,7 @@ import type { Logger } from '@/helpers/logger/logger.types'
 import type { ComponentName, Entity } from '@/kernel/ecs/ecs.types'
 
 declare global {
-  interface AllegoryCustomEventMap { }
+  interface AllegoryCustomEventMap {}
 }
 
 export const WILDCARD = '*'
@@ -13,7 +13,7 @@ export const DEFAULT_EMIT_STREAMS = {
   semanticCacheUpdated: 'semanticCacheUpdated',
 } as const
 
-export type SystemEmitStream = typeof DEFAULT_EMIT_STREAMS[keyof typeof DEFAULT_EMIT_STREAMS]
+export type SystemEmitStream = (typeof DEFAULT_EMIT_STREAMS)[keyof typeof DEFAULT_EMIT_STREAMS]
 
 /**
  * In order to have the best type-safe development experience, declare the shape of
@@ -56,7 +56,9 @@ export interface EngineEvent<Stream extends EmitStream> {
   payload: EventPayload<Stream>
 }
 
-export type Listener<Stream extends EmitStream> = (event: EngineEvent<Stream>) => void | Promise<void>
+export type Listener<Stream extends EmitStream> = (
+  event: EngineEvent<Stream>,
+) => void | Promise<void>
 
 export interface EventBusConfig {
   logger?: Logger
