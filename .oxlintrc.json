@@ -9,7 +9,8 @@
   "rules": {
     "typescript/consistent-type-imports": "error",
     "import/no-relative-parent-imports": "error",
-    "no-await-in-loop": "off"
+    "no-await-in-loop": "off",
+    "no-unused-expressions": ["error", { "allowTaggedTemplates": true }]
   },
   "env": {
     "builtin": true

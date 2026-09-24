@@ -3,7 +3,10 @@ export interface LoggerChannelOpts {
   warn: boolean
   info: boolean
   debug: boolean
+  silly: boolean
 }
+
+export type LoggerLevels = 'error' | 'warn' | 'info' | 'debug' | 'silly' | 'silent'
 
 export interface Logger {
   info: (...args: any[]) => void
@@ -11,4 +14,8 @@ export interface Logger {
   error: (...args: any[]) => void
   errorAndThrow: (message: string) => never
   warn: (...args: any[]) => void
+  silly: {
+    (strings: TemplateStringsArray, ...values: any[]): void
+    (message: string, ...args: any[]): void
+  }
 }
