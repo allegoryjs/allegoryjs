@@ -1,16 +1,8 @@
-import type EventBus from '@/helpers/event-bus/event-bus'
-import { DEFAULT_EMIT_STREAMS } from '@/helpers/event-bus/event-bus.types'
-import type {
-  SystemEventMap,
-  EcsComponentModifiedEventPayload,
-  EngineEvent,
-} from '@/helpers/event-bus/event-bus.types'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
 import {
   SYSTEM_SCHEMA_COMPONENTS,
-  type EngineComponentSchema,
   type Entity,
   InitializableSystem,
   type ComponentName,
@@ -20,6 +12,7 @@ import {
 import type {
   DescriptorCacheEntry,
   SemanticCacheConfig,
+  SemanticCacheData,
 } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.types'
 
 const DESCRIPTOR_DELIMITER = ';;'
@@ -76,8 +69,9 @@ function aggregateDescriptors(
 export class SemanticCacheSystem extends InitializableSystem {
   #initialized = false
   #ecs: ECS
-  #currentRevision: Revision
-  #resolvers: Map<ComponentName, (componentData: any) => string>
+  #lastSeenRevision: Revision
+  #resolvers: Map<ComponentName, (componentData: ActiveComponentSchema[ComponentName]) => string>
+  #staleResolvers: Set<ComponentName>
   #vectorize: (text: string) => number[]
   #descriptorAggregator: (
     descriptors: Map<ComponentName, string>,
@@ -94,10 +88,12 @@ export class SemanticCacheSystem extends InitializableSystem {
     this.#ecs = ecs
     this.#vectorize = vectorize
 
-
     this.logger = logger ?? new DefaultLogger()
     this.#resolvers = new Map<ComponentName, (componentData: ActiveComponentSchema[ComponentName]) => string>()
     this.#descriptorAggregator = customDescriptorAggregator ?? aggregateDescriptors
+
+    this.#lastSeenRevision = this.#ecs.currentRevision
+    this.#staleResolvers = new Set(this.#resolvers.keys())
   }
 
   get name() {
@@ -109,39 +105,45 @@ export class SemanticCacheSystem extends InitializableSystem {
       this.logger.errorAndThrow(`Cannot run ${this.name} system; system not initialized`)
     }
 
-    const entitiesWithCache = this.#ecs.getEntitiesByComponents(
+    const dirtyEntities = this.#ecs.getDirtyEntitiesByComponentRevision(
       SYSTEM_SCHEMA_COMPONENTS.semanticCache,
+      this.#lastSeenRevision
+    ).union(
+      this.#ecs.getEntitiesByComponents(...Array.from(this.#staleResolvers)),
     )
 
-    entitiesWithCache.forEach((entity) => {
-      const { dirty } =
-        this.#ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache) ?? {}
+    for (const entity of dirtyEntities) {
+      this.#buildCacheForEntity(entity)
+    }
 
-      if (dirty) {
-        this.#buildCacheForEntity(entity)
-      }
-    })
+    this.#lastSeenRevision = this.#ecs.currentRevision
+    this.#staleResolvers.clear()
   }
 
   async onInit() {
-    this.#currentRevision = this.#ecs.currentRevision
+    this.#lastSeenRevision = this.#ecs.currentRevision
+
+    for (const componentWithResolver of this.#resolvers.keys()) {
+      this.#staleResolvers.add(componentWithResolver)
+    }
+
     this.#ecs.registerComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache)
-    this.#buildCache()
+    this.onRun()
     this.#initialized = true
-    this.logger.info('Semantic Cache System initialized; all listeners added')
+    this.logger.info('Semantic Cache System initialized')
   }
 
   async onDispose() {
     this.#ecs.deregisterComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache)
 
     this.logger.info(
-      'Semantic Cache System disposed; all listeners unbound and cache component removed from all entities',
+      'Semantic Cache System disposed; cache component removed from all entities',
     )
   }
 
-  registerResolver<K extends ComponentName>(
-    componentName: K,
-    resolver: (componentData: Readonly<ActiveComponentSchema[K]>) => string,
+  registerResolver<Component extends ComponentName>(
+    componentName: Component,
+    resolver: (componentData: ActiveComponentSchema[ComponentName]) => string,
   ) {
     if (this.#resolvers.has(componentName)) {
       this.logger.info(`Replacing existing resolver for component ${componentName}`)
@@ -149,18 +151,11 @@ export class SemanticCacheSystem extends InitializableSystem {
       this.logger.info(`Registering new resolver for component ${componentName}`)
     }
 
-    this.#resolvers.set(componentName, resolver as (componentData: any) => string)
-
-    const entitiesWithComponent = this.#ecs.getEntitiesByComponents(componentName)
-
-    for (const entity of entitiesWithComponent) {
-      this.#ecs.updateComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
-        dirty: true,
-      })
-    }
+    this.#resolvers.set(componentName, resolver)
+    this.#staleResolvers.add(componentName)
   }
 
-  deregisterResolver<K extends ComponentName>(componentName: K) {
+  deregisterResolver<Component extends ComponentName>(componentName: Component) {
     if (!this.#resolvers.has(componentName)) {
       this.logger.warn(
         `Cannot deregister resolver for component ${componentName}; resolver not registered`,
@@ -169,16 +164,7 @@ export class SemanticCacheSystem extends InitializableSystem {
     }
 
     this.#resolvers.delete(componentName)
-
-    const entitiesWithCache = this.#ecs.getEntitiesByComponents(
-      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
-    )
-
-    for (const entity of entitiesWithCache) {
-      this.#ecs.updateComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
-        dirty: true,
-      })
-    }
+    this.#staleResolvers.add(componentName)
 
     this.logger.info(
       `Removed resolver for component ${componentName}; all entities marked as requiring cache rebuild on next tick`,
@@ -191,12 +177,26 @@ export class SemanticCacheSystem extends InitializableSystem {
       this.logger.errorAndThrow(err)
     }
 
+    const entityHasNoun = !!this.#ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.noun)
+      ?.noun
+
+    if (!entityHasNoun) {
+      this.logger.info(`
+        Semantic Cache build triggered in Semantic Cache system for entity ${entity}, but entity does not have the Noun component.
+        Skipping semantic cache generation and removing cache component. Player will not be able to directly interact with this entity.
+      `.trim())
+
+      this.#ecs.removeComponentFromEntity(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
+      return
+    }
+
     const componentDescriptors: Map<ComponentName, string> = new Map()
 
     const componentData = this.#ecs.getAllEntityComponentData(entity)
 
     for (const [componentName, data] of Object.entries(componentData)) {
       const resolver = this.#resolvers.get(componentName as ComponentName)
+
       if (resolver) {
         componentDescriptors.set(componentName as ComponentName, resolver(data))
       }
@@ -218,8 +218,7 @@ export class SemanticCacheSystem extends InitializableSystem {
       (descriptor) => [descriptor, this.#vectorize(descriptor)] as [string, number[]],
     )
 
-    const cacheEntry = {
-      dirty: false,
+    const cacheEntry: SemanticCacheData = {
       fullDescriptor: aggregated.combined,
       fullVector: this.#vectorize(aggregated.combined),
       chunks,
@@ -229,79 +228,5 @@ export class SemanticCacheSystem extends InitializableSystem {
 
     this.logger.debug(`Built semantic cache for entity ${entity}`)
     this.logger.silly`Semantic cache for entity ${entity}: ${cacheEntry}`
-  }
-
-  #buildCache() {
-    this.logger.debug('Building semantic caches for all entities')
-
-    const activeEntitiesWithCache = this.#ecs.getEntitiesByComponents(
-      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
-    )
-
-    for (const entity of activeEntitiesWithCache) {
-      this.#buildCacheForEntity(entity)
-    }
-  }
-
-  #handleComponentModified = ({
-    payload: { entity, component },
-  }: EngineEvent<EcsComponentModifiedEventPayload<ComponentSchema>>) => {
-    if (component === SYSTEM_SCHEMA_COMPONENTS.semanticCache) {
-      this.logger.debug(
-        `Semantic Cache system detected change in Semantic Cache component data on entity ${entity}; returning`,
-      )
-      return
-    }
-
-    const resolver = this.#resolvers.get(component)
-
-    if (!resolver) {
-      this.logger.debug(
-        `
-        Component modification handler triggered in Semantic Cache system, but no resolver exists for component ${component}; returning.
-      `.trim(),
-      )
-
-      return
-    }
-
-    const entityHasNoun = !!this.#ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.noun)
-      ?.noun
-
-    if (!entityHasNoun) {
-      this.logger.debug(
-        `
-        Component modification handler triggered in Semantic Cache system for entity ${entity},
-        and there is a resolver registered for component ${component}, but entity does not have the Noun component.
-        Skipping semantic cache generation. Player will not be able to directly interact with this entity.
-      `.trim(),
-      )
-
-      return
-    }
-
-    const cacheExists = this.#ecs.entityHasComponent(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
-
-    if (!cacheExists) {
-      this.logger.debug(
-        `
-        A semantic cache resolver exists for component ${component}, and entity ${entity} has that component,
-        but no cache entry exists for the entity. Marking entity for descriptor cache generation.
-      `.trim(),
-      )
-      this.#ecs.setComponentOnEntity(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
-        dirty: true,
-      })
-    } else {
-      this.logger.debug(
-        `
-        A semantic cache resolver exists for component ${component}, entity ${entity} has that component,
-        and a cache entry exists for the entity. Marking entity for descriptor cache regeneration.
-      `.trim(),
-      )
-      this.#ecs.updateComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
-        dirty: true,
-      })
-    }
   }
 }

@@ -20,8 +20,6 @@ export interface DescriptorCacheEntry {
 }
 
 export interface SemanticCacheData {
-  dirty: boolean // whether the entity needs to have its cache recalculated due to component data update
-
   fullDescriptor?: string
   fullVector?: number[]
   chunks?: [descriptor: string, vector: number[]][]

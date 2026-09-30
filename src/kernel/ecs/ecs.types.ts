@@ -155,9 +155,9 @@ export interface EngineComponentSchema {
     noun: string // the main noun word/concept associated with the entity, e.g. "sword" or "potion bottle"
   }
 
-  SemanticCache: SemanticCacheData & POJO
+  SemanticCache: SemanticCacheData
 
-  SalienceCache: SalienceCacheData & POJO
+  SalienceCache: SalienceCacheData
 }
 
 export type ActiveComponentSchema = EngineComponentSchema & CustomComponentSchema

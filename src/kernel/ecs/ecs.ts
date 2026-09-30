@@ -281,10 +281,10 @@ export default class DefaultECS extends ECS {
   }
 
   // destructive; overwrites existing component data, if any
-  setComponentOnEntity(
+  setComponentOnEntity<Component extends ComponentName>(
     entity: Entity,
-    name: ComponentName,
-    data: ActiveComponentSchema[ComponentName],
+    name: Component,
+    data: ActiveComponentSchema[Component],
   ) {
     this.#assertEntityExists(entity, 'set component on')
 
