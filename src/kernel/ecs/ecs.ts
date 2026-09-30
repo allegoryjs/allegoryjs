@@ -171,7 +171,7 @@ export default class DefaultECS extends ECS {
         if (!state[entity]) {
           state[entity] = {}
         }
-        state[entity][componentName] = componentData
+        state[entity][componentName] = componentData as POJO
       }
     }
 

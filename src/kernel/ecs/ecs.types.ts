@@ -1,7 +1,6 @@
 import type { Logger } from '@/helpers/logger/logger.types'
 import type { SalienceCacheData } from '@/kernel/ecs/systems/salience/salience.types'
 import type { SemanticCacheData } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.types'
-import type { POJO } from '@/utilities/schemer/schemer.types'
 
 declare global {
   interface AllegoryCustomComponentSchema {}
@@ -208,14 +207,14 @@ export interface System {
 export abstract class InitializableSystem implements System {
   abstract readonly name: string
 
-  private initialized = false
+  protected initialized = false
 
   public async init(ecs: ECS): Promise<void> {
     if (this.initialized) {
       this.logger.errorAndThrow(`Cannot initialize ${this.name} system; system already initialized`)
     }
 
-    this.onInit(ecs)
+    await this.onInit(ecs)
   }
 
   public async dispose(ecs: ECS): Promise<void> {
@@ -223,7 +222,7 @@ export abstract class InitializableSystem implements System {
       this.logger.errorAndThrow(`Cannot dispose of ${this.name} system; system not initialized`)
     }
 
-    this.onDispose(ecs)
+    await this.onDispose(ecs)
   }
 
   public async run(ecs: ECS): Promise<void> {
@@ -231,7 +230,7 @@ export abstract class InitializableSystem implements System {
       this.logger.errorAndThrow(`Cannot run ${this.name} system; system not initialized`)
     }
 
-    this.onRun(ecs)
+    await this.onRun(ecs)
   }
 
   protected abstract logger: Logger
