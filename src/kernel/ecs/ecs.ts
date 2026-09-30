@@ -247,8 +247,8 @@ export default class DefaultECS extends ECS {
 
     const componentRevisionsMap = this.#entityRevisions.getOrInsert(id, new Map())
 
-    for (const component in this.#components.keys()) {
-      componentRevisionsMap.set(component as ComponentName, this.#revision)
+    for (const component of this.getComponentsOnEntity(id)) {
+      componentRevisionsMap.set(component, this.#revision)
     }
 
     this.#logger.info(`Entity ${id} created (metaId: "${metaIdToSet}")`)
@@ -370,7 +370,7 @@ export default class DefaultECS extends ECS {
     }
 
     store.delete(entity)
-    this.#entityRevisions.delete(entity)
+    this.#entityRevisions.get(entity)?.delete(componentType)
     this.#incrementRevision()
     this.#logger.debug(`Removed component "${componentType}" from entity ${entity}`)
   }
@@ -509,6 +509,7 @@ export default class DefaultECS extends ECS {
 
     this.#activeEntities.delete(entity)
     this.#prettyIdMap.delete(prettyId)
+    this.#entityRevisions.delete(entity)
     this.#logger.info(`Entity ${entity} destroyed`)
   }
 

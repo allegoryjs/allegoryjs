@@ -786,6 +786,8 @@ describe('readonlyFacade', () => {
     expect(typeof facade.getEntitiesByComponents).toBe('function')
     expect(typeof facade.getComponentsOnEntity).toBe('function')
     expect(typeof facade.getEntityComponentData).toBe('function')
+    expect(typeof facade.getEntityComponentRevision).toBe('function')
+    expect(typeof facade.getDirtyEntitiesByComponentRevision).toBe('function')
   })
 
   test('facade methods work correctly', () => {
@@ -806,6 +808,8 @@ describe('readonlyFacade', () => {
     })
     expect(Array.from(facade.getEntitiesByComponents('position'))).toEqual([e])
     expect(facade.getComponentsOnEntity(e)).toContain('position')
+    expect(facade.getEntityComponentRevision(e, 'position')).toBe(ecs.currentRevision)
+    expect(Array.from(facade.getDirtyEntitiesByComponentRevision('position', 0))).toEqual([e])
   })
 
   test('facade does not expose mutation methods', () => {
@@ -818,6 +822,352 @@ describe('readonlyFacade', () => {
     expect((facade as any).removeComponentFromEntity).toBeUndefined()
     expect((facade as any).registerComponent).toBeUndefined()
     expect((facade as any).addTagToEntity).toBeUndefined()
+  })
+})
+
+// ─── currentRevision ──────────────────────────────────────────────
+
+describe('currentRevision', () => {
+  test('starts at 0 on a newly initialized ECS instance', () => {
+    const ecs = makeECS()
+    expect(ecs.currentRevision).toBe(0)
+  })
+
+  test('increments when creating an entity with default components', () => {
+    const ecs = makeECS()
+    // createEntity sets Tags and Meta components, each incrementing revision
+    const e = ecs.createEntity()
+    expect(ecs.currentRevision).toBe(2)
+    expect(ecs.getEntityComponentRevision(e, 'Tags')).toBe(2)
+    expect(ecs.getEntityComponentRevision(e, 'Meta')).toBe(2)
+  })
+
+  test('increments additional revision when entity is created with a noun', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity('hero', 'warrior')
+    expect(ecs.currentRevision).toBe(3)
+    expect(ecs.getEntityComponentRevision(e, 'Noun')).toBe(3)
+  })
+
+  test('increments when setting a component on an entity', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+    const revBefore = ecs.currentRevision
+    ecs.setComponentOnEntity(e, 'position', { x: 10, y: 20 })
+    expect(ecs.currentRevision).toBe(revBefore + 1)
+  })
+
+  test('increments when updating component data on an entity', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 10, y: 20 })
+    const revBefore = ecs.currentRevision
+    ecs.updateComponentData(e, 'position', { x: 30 })
+    expect(ecs.currentRevision).toBe(revBefore + 1)
+  })
+
+  test('increments when removing a component from an entity', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 10, y: 20 })
+    const revBefore = ecs.currentRevision
+    ecs.removeComponentFromEntity(e, 'position')
+    expect(ecs.currentRevision).toBe(revBefore + 1)
+  })
+
+  test('monotonically increases across multiple operations', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    ecs.registerComponent('health')
+
+    const revs: number[] = [ecs.currentRevision]
+    const e1 = ecs.createEntity()
+    revs.push(ecs.currentRevision)
+    const e2 = ecs.createEntity()
+    revs.push(ecs.currentRevision)
+    ecs.setComponentOnEntity(e1, 'position', { x: 0, y: 0 })
+    revs.push(ecs.currentRevision)
+    ecs.setComponentOnEntity(e2, 'health', { current: 100, max: 100 })
+    revs.push(ecs.currentRevision)
+    ecs.updateComponentData(e1, 'position', { x: 5 })
+    revs.push(ecs.currentRevision)
+    ecs.removeComponentFromEntity(e2, 'health')
+    revs.push(ecs.currentRevision)
+
+    for (let i = 1; i < revs.length; i++) {
+      expect(revs[i]!).toBeGreaterThan(revs[i - 1]!)
+    }
+  })
+})
+
+// ─── getEntityComponentRevision ─────────────────────────────────────
+
+describe('getEntityComponentRevision', () => {
+  test('returns revision matching the operation that set the component', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 1, y: 2 })
+    expect(ecs.getEntityComponentRevision(e, 'position')).toBe(ecs.currentRevision)
+  })
+
+  test('updates component revision when updateComponentData is called', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 1, y: 2 })
+    const initialRev = ecs.getEntityComponentRevision(e, 'position')
+
+    ecs.updateComponentData(e, 'position', { x: 10 })
+    const updatedRev = ecs.getEntityComponentRevision(e, 'position')
+
+    expect(updatedRev).toBeGreaterThan(initialRev)
+    expect(updatedRev).toBe(ecs.currentRevision)
+  })
+
+  test('updates component revision when setComponentOnEntity overwrites data', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 1, y: 2 })
+    const initialRev = ecs.getEntityComponentRevision(e, 'position')
+
+    ecs.setComponentOnEntity(e, 'position', { x: 50, y: 60 })
+    const overwrittenRev = ecs.getEntityComponentRevision(e, 'position')
+
+    expect(overwrittenRev).toBeGreaterThan(initialRev)
+    expect(overwrittenRev).toBe(ecs.currentRevision)
+  })
+
+  test('tracks revisions independently per component on the same entity', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    ecs.registerComponent('velocity')
+    const e = ecs.createEntity()
+
+    ecs.setComponentOnEntity(e, 'position', { x: 1, y: 2 })
+    const posRev1 = ecs.getEntityComponentRevision(e, 'position')
+
+    ecs.setComponentOnEntity(e, 'velocity', { x: 0, y: 1 })
+    const velRev1 = ecs.getEntityComponentRevision(e, 'velocity')
+    expect(velRev1).toBeGreaterThan(posRev1)
+    expect(ecs.getEntityComponentRevision(e, 'position')).toBe(posRev1)
+
+    ecs.updateComponentData(e, 'position', { x: 5 })
+    const posRev2 = ecs.getEntityComponentRevision(e, 'position')
+    expect(posRev2).toBeGreaterThan(velRev1)
+    expect(ecs.getEntityComponentRevision(e, 'velocity')).toBe(velRev1)
+  })
+
+  test('tracks revisions independently across different entities', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e1 = ecs.createEntity()
+    const e2 = ecs.createEntity()
+
+    ecs.setComponentOnEntity(e1, 'position', { x: 1, y: 2 })
+    const e1Rev = ecs.getEntityComponentRevision(e1, 'position')
+
+    ecs.setComponentOnEntity(e2, 'position', { x: 3, y: 4 })
+    const e2Rev = ecs.getEntityComponentRevision(e2, 'position')
+
+    expect(e2Rev).toBeGreaterThan(e1Rev)
+    expect(ecs.getEntityComponentRevision(e1, 'position')).toBe(e1Rev)
+  })
+
+  test('throws when entity does not exist', () => {
+    const ecs = makeECS()
+    expect(() => ecs.getEntityComponentRevision(999, 'Meta')).toThrow(
+      `Can't get component revision entity 999; entity does not exist`,
+    )
+  })
+
+  test('throws when entity is destroyed', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+    ecs.destroyEntity(e)
+    expect(() => ecs.getEntityComponentRevision(e, 'Meta')).toThrow(
+      `Can't get component revision entity ${e}; entity is destroyed`,
+    )
+  })
+
+  test('throws when entity does not have the component', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+    expect(() => ecs.getEntityComponentRevision(e, 'position')).toThrow(
+      'entity does not have component',
+    )
+  })
+
+  test('retains revisions for remaining components after removing another component', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 1, y: 2 })
+    const metaRev = ecs.getEntityComponentRevision(e, 'Meta')
+
+    ecs.removeComponentFromEntity(e, 'position')
+
+    expect(ecs.getEntityComponentRevision(e, 'Meta')).toBe(metaRev)
+    expect(() => ecs.getEntityComponentRevision(e, 'position')).toThrow(
+      'entity does not have component',
+    )
+  })
+})
+
+// ─── getDirtyEntitiesByComponentRevision ────────────────────────────
+
+describe('getDirtyEntitiesByComponentRevision', () => {
+  test('returns empty set when no entities have the component', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    ecs.createEntity()
+    const dirty = ecs.getDirtyEntitiesByComponentRevision('position', 0)
+    expect(dirty.size).toBe(0)
+  })
+
+  test('returns all entities having the component when lastRevision is 0', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e1 = ecs.createEntity()
+    const e2 = ecs.createEntity()
+    ecs.setComponentOnEntity(e1, 'position', { x: 1, y: 2 })
+    ecs.setComponentOnEntity(e2, 'position', { x: 3, y: 4 })
+
+    const dirty = ecs.getDirtyEntitiesByComponentRevision('position', 0)
+    expect(dirty).toEqual(new Set([e1, e2]))
+  })
+
+  test('returns empty set when lastRevision is equal to currentRevision', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 1, y: 2 })
+
+    const dirty = ecs.getDirtyEntitiesByComponentRevision('position', ecs.currentRevision)
+    expect(dirty.size).toBe(0)
+  })
+
+  test('returns empty set when lastRevision is greater than component revision', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 1, y: 2 })
+
+    const dirty = ecs.getDirtyEntitiesByComponentRevision('position', ecs.currentRevision + 10)
+    expect(dirty.size).toBe(0)
+  })
+
+  test('filters entities modified before vs after a checkpoint revision', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e1 = ecs.createEntity()
+    ecs.setComponentOnEntity(e1, 'position', { x: 1, y: 1 })
+
+    const checkpoint = ecs.currentRevision
+
+    const e2 = ecs.createEntity()
+    ecs.setComponentOnEntity(e2, 'position', { x: 2, y: 2 })
+
+    const dirtySinceCheckpoint = ecs.getDirtyEntitiesByComponentRevision('position', checkpoint)
+    expect(dirtySinceCheckpoint).toEqual(new Set([e2]))
+
+    const dirtySinceBeginning = ecs.getDirtyEntitiesByComponentRevision('position', 0)
+    expect(dirtySinceBeginning).toEqual(new Set([e1, e2]))
+  })
+
+  test('detects updates via updateComponentData as dirty', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e1 = ecs.createEntity()
+    const e2 = ecs.createEntity()
+    ecs.setComponentOnEntity(e1, 'position', { x: 1, y: 1 })
+    ecs.setComponentOnEntity(e2, 'position', { x: 2, y: 2 })
+
+    const checkpoint = ecs.currentRevision
+
+    ecs.updateComponentData(e1, 'position', { x: 100 })
+
+    const dirty = ecs.getDirtyEntitiesByComponentRevision('position', checkpoint)
+    expect(dirty).toEqual(new Set([e1]))
+  })
+
+  test('detects overwrites via setComponentOnEntity as dirty', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e1 = ecs.createEntity()
+    ecs.setComponentOnEntity(e1, 'position', { x: 1, y: 1 })
+
+    const checkpoint = ecs.currentRevision
+
+    ecs.setComponentOnEntity(e1, 'position', { x: 99, y: 99 })
+
+    const dirty = ecs.getDirtyEntitiesByComponentRevision('position', checkpoint)
+    expect(dirty).toEqual(new Set([e1]))
+  })
+
+  test('does not report an entity as dirty for component A when component B was changed', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    ecs.registerComponent('velocity')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 0, y: 0 })
+
+    const checkpoint = ecs.currentRevision
+
+    ecs.setComponentOnEntity(e, 'velocity', { x: 1, y: 1 })
+
+    const positionDirty = ecs.getDirtyEntitiesByComponentRevision('position', checkpoint)
+    expect(positionDirty.size).toBe(0)
+
+    const velocityDirty = ecs.getDirtyEntitiesByComponentRevision('velocity', checkpoint)
+    expect(velocityDirty).toEqual(new Set([e]))
+  })
+
+  test('no longer returns entity as dirty after component is removed', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 10, y: 20 })
+
+    expect(ecs.getDirtyEntitiesByComponentRevision('position', 0)).toEqual(new Set([e]))
+
+    ecs.removeComponentFromEntity(e, 'position')
+
+    expect(ecs.getDirtyEntitiesByComponentRevision('position', 0).size).toBe(0)
+  })
+
+  test('works with built-in components (Meta, Tags, Noun)', () => {
+    const ecs = makeECS()
+    const e1 = ecs.createEntity('hero', 'warrior')
+
+    const checkpoint = ecs.currentRevision
+
+    const e2 = ecs.createEntity('monster', 'dragon')
+
+    const dirtyNoun = ecs.getDirtyEntitiesByComponentRevision('Noun', checkpoint)
+    expect(dirtyNoun).toEqual(new Set([e2]))
+
+    const allDirtyNoun = ecs.getDirtyEntitiesByComponentRevision('Noun', 0)
+    expect(allDirtyNoun).toEqual(new Set([e1, e2]))
+
+    const dirtyMeta = ecs.getDirtyEntitiesByComponentRevision('Meta', checkpoint)
+    expect(dirtyMeta).toEqual(new Set([e2]))
+  })
+
+  test('does not return destroyed entities', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 1, y: 2 })
+    ecs.destroyEntity(e)
+
+    const dirty = ecs.getDirtyEntitiesByComponentRevision('position', 0)
+    expect(dirty.size).toBe(0)
   })
 })
 
