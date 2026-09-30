@@ -6,19 +6,20 @@ import type {
   EmitStream,
   EventPayload,
 } from '@/helpers/event-bus/event-bus.types'
-
 import { EventBus, WILDCARD } from '@/helpers/event-bus/event-bus.types'
-import type { EngineContext } from '@/engine/engine.types'
+import { DefaultLogger } from '@/helpers/logger/logger'
+import type { Logger } from '@/helpers/logger/logger.types'
 
 export default class DefaultEventBus extends EventBus {
   #listeners = new Map<string, Set<Listener<any>>>()
   #debug: boolean
-  #ctx: EngineContext
+  #logger: Logger
 
-  constructor(ctx: EngineContext, config?: EventBusConfig) {
-    super(ctx, config)
+  constructor(logger?: Logger, config?: EventBusConfig) {
+    const resolvedLogger = logger ?? new DefaultLogger()
+    super(resolvedLogger, config)
 
-    this.#ctx = ctx
+    this.#logger = resolvedLogger
     this.#debug = config?.debug ?? false
   }
 
@@ -30,7 +31,7 @@ export default class DefaultEventBus extends EventBus {
     listeners.add(cb)
 
     if (this.#debug) {
-      this.#ctx.logger.debug(`[EventBus] Subscribed to ${stream}`)
+      this.#logger.debug(`[EventBus] Subscribed to ${stream}`)
     }
 
     return () => this.unsubscribe(stream, cb)
@@ -40,7 +41,7 @@ export default class DefaultEventBus extends EventBus {
     if (!cb) {
       this.#listeners.delete(stream)
       if (this.#debug) {
-        this.#ctx.logger.debug(`[EventBus] Unsubscribed all listeners from ${stream}`)
+        this.#logger.debug(`[EventBus] Unsubscribed all listeners from ${stream}`)
       }
       return
     }
@@ -53,7 +54,7 @@ export default class DefaultEventBus extends EventBus {
       }
     }
     if (this.#debug) {
-      this.#ctx.logger.debug(`[EventBus] Unsubscribed a listener from ${stream}`)
+      this.#logger.debug(`[EventBus] Unsubscribed a listener from ${stream}`)
     }
   }
 
@@ -67,8 +68,8 @@ export default class DefaultEventBus extends EventBus {
     }
 
     if (this.#debug) {
-      this.#ctx.logger.debug(`[EventBus] Emitted ${stream} at ${event.timestamp}`)
-      this.#ctx.logger.silly`[EventBus] Payload for ${stream}: ${event.payload}`
+      this.#logger.debug(`[EventBus] Emitted ${stream} at ${event.timestamp}`)
+      this.#logger.silly`[EventBus] Payload for ${stream}: ${event.payload}`
     }
 
     const listenersToInvoke = new Set<Listener<any>>()
@@ -109,7 +110,7 @@ export default class DefaultEventBus extends EventBus {
   clear(): void {
     this.#listeners.clear()
     if (this.#debug) {
-      this.#ctx.logger.debug('[EventBus] Cleared all listeners')
+      this.#logger.debug('[EventBus] Cleared all listeners')
     }
   }
 

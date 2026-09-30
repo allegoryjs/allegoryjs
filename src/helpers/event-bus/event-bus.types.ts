@@ -1,4 +1,4 @@
-import type { EngineContext } from '@/engine/engine.types'
+import type { Logger } from '@/helpers/logger/logger.types'
 import type { Entity } from '@/kernel/ecs/ecs.types'
 
 declare global {
@@ -46,8 +46,8 @@ export type EventPayload<Stream extends EmitStream> = ActiveEventMap[Stream]
 
 export abstract class EventBus {
   constructor(
-    protected ctx: EngineContext,
-    protected config?: EventBusConfig
+    protected readonly logger: Logger,
+    protected readonly config?: EventBusConfig,
   ) {}
 
   abstract subscribe<Stream extends EmitStream>(stream: Stream, cb: Listener<Stream>): Disposer

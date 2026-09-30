@@ -1,21 +1,23 @@
 import { describe, expect, it, beforeEach } from 'bun:test'
 
 import EventBus from '@/helpers/event-bus/event-bus'
+import { WILDCARD } from '@/helpers/event-bus/event-bus.types'
 import { DefaultLogger } from '@/helpers/logger/logger'
-
-import { WILDCARD } from './event-bus.types'
 
 describe('EventBus', () => {
   let emitter: EventBus
 
   beforeEach(() => {
     const logger = new DefaultLogger({
-      info: false,
-      debug: false,
-      error: false,
-      warn: false,
+      channelOpts: {
+        info: false,
+        debug: false,
+        error: false,
+        warn: false,
+        silly: false,
+      },
     })
-    emitter = new EventBus({ logger, debug: false })
+    emitter = new EventBus(logger, { debug: false })
   })
 
   it('delivers typed payloads to subscribers', async () => {

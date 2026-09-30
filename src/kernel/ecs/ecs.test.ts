@@ -1,19 +1,20 @@
 import { describe, expect, test } from 'bun:test'
 
-import EventBus from '@/helpers/event-bus/event-bus'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import ECS from '@/kernel/ecs/ecs'
 import { entityHasTag, parseStateJson } from '@/kernel/ecs/ecs.helpers'
 
 function makeECS() {
   const logger = new DefaultLogger({
-    info: false,
-    debug: false,
-    error: false,
-    warn: false,
+    channelOpts: {
+      info: false,
+      debug: false,
+      error: false,
+      warn: false,
+      silly: false,
+    },
   })
-  const eventBus = new EventBus()
-  return new ECS(eventBus, logger)
+  return new ECS(logger)
 }
 
 // ─── createEntity ───────────────────────────────────────────────────
@@ -865,7 +866,7 @@ describe('Systems', () => {
 
   test('systems use default priority when none is provided', () => {
     // Default priority set to 25
-    const ecs = new ECS(new EventBus(), undefined, 25)
+    const ecs = new ECS(undefined, { defaultSystemPriority: 25 })
     const s1 = {
       name: 's1',
       priority: 50,

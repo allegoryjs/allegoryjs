@@ -1,4 +1,3 @@
-import type { EngineContext } from '@/engine/engine.types'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type { SalienceCacheData } from '@/kernel/ecs/systems/salience/salience.types'
 import type { SemanticCacheData } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.types'
@@ -17,8 +16,8 @@ export interface EcsConfig {
 
 export abstract class ECS {
   constructor(
-    protected readonly ctx: EngineContext,
-    protected readonly config: EcsConfig
+    protected readonly logger: Logger,
+    protected readonly config?: EcsConfig,
   ) {}
 
   abstract get systems(): readonly System[]
@@ -34,10 +33,7 @@ export abstract class ECS {
 
   abstract isComponent(name: string): name is ComponentName
 
-  abstract registerComponent(
-    name: ComponentName,
-    opts: ComponentRegistrationOptions,
-  ): void
+  abstract registerComponent(name: ComponentName, opts: ComponentRegistrationOptions): void
 
   abstract deregisterComponent(name: ComponentName): void
 
@@ -93,7 +89,10 @@ export abstract class ECS {
 
   abstract getEntityComponentRevision(entity: Entity, component: ComponentName): Revision
 
-  abstract getDirtyEntitiesByComponentRevision(component: ComponentName, lastRevision: Revision): Set<Entity>
+  abstract getDirtyEntitiesByComponentRevision(
+    component: ComponentName,
+    lastRevision: Revision,
+  ): Set<Entity>
 }
 
 export const SYSTEM_SCHEMA_COMPONENTS = {

@@ -3,28 +3,30 @@ import { describe, expect, mock, test } from 'bun:test'
 import EventBus from '@/helpers/event-bus/event-bus'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import ECS from '@/kernel/ecs/ecs'
-import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
 import { SYSTEM_SCHEMA_COMPONENTS } from '@/kernel/ecs/ecs.types'
 import { SemanticCacheSystem } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.system'
 
-interface TestSchema extends EngineComponentSchema {
-  position: { x: number; y: number }
-  name: { value: string }
-}
 
 describe('SemanticCacheSystem', () => {
   function setup() {
-    const logger = new DefaultLogger({ info: false, debug: false, error: false, warn: false })
-    const eventBus = new EventBus<TestSchema>()
-    const ecs = new ECS<TestSchema>(eventBus, logger)
+    const logger = new DefaultLogger({
+      channelOpts: {
+        error: false,
+        warn: false,
+        info: false,
+        debug: false,
+        silly: false,
+      }
+    })
+    const eventBus = new EventBus()
+    const ecs = new ECS(logger)
     ecs.registerComponent('name')
     ecs.registerComponent('position')
 
     const vectorize = mock((_: string) => [1, 2, 3])
 
-    const system = new SemanticCacheSystem<TestSchema>({
+    const system = new SemanticCacheSystem({
       ecs,
-      eventBus,
       vectorize,
       logger,
     })
@@ -65,8 +67,8 @@ describe('SemanticCacheSystem', () => {
     await system.onRun()
 
     const cacheData = ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
-    expect(cacheData.dirty).toBe(false)
-    expect(cacheData.fullDescriptor).toContain('Name is Run Test')
+    expect(cacheData?.dirty).toBe(false)
+    expect(cacheData?.fullDescriptor).toContain('Name is Run Test')
   })
 
   test('onDispose removes listeners and deregisters cache component', async () => {
@@ -97,7 +99,7 @@ describe('SemanticCacheSystem', () => {
     system.deregisterResolver('name')
 
     const cacheData = ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
-    expect(cacheData.dirty).toBe(true)
+    expect(cacheData?.dirty).toBe(true)
   })
 
   test('deregisterResolver gracefully handles unregistered resolvers', () => {
@@ -119,7 +121,7 @@ describe('SemanticCacheSystem', () => {
 
     expect(ecs.entityHasComponent(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)).toBe(true)
     const cacheData = ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
-    expect(cacheData.dirty).toBe(true)
+    expect(cacheData?.dirty).toBe(true)
 
     // Mark it not dirty to check if update makes it dirty again
     ecs.updateComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
@@ -128,7 +130,7 @@ describe('SemanticCacheSystem', () => {
 
     ecs.updateComponentData(entity, 'name', { value: 'Another Name' })
     const cacheData2 = ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
-    expect(cacheData2.dirty).toBe(true)
+    expect(cacheData2?.dirty).toBe(true)
   })
 
   test('entities with cache component but no matching resolvers will have cache component removed', async () => {
