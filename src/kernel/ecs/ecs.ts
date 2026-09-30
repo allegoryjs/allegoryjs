@@ -1,5 +1,4 @@
-import { DefaultLogger } from '@/helpers/logger/logger'
-import type { Logger } from '@/helpers/logger/logger.types'
+import type { EngineContext } from '@/engine/engine.types'
 import { parseStateJson } from '@/kernel/ecs/ecs.helpers'
 import {
   type Entity,
@@ -15,11 +14,13 @@ import {
   type ComponentName,
   type ActiveComponentSchema,
   type Revision,
+  type EcsConfig,
+  ECS,
 } from '@/kernel/ecs/ecs.types'
 import deepFreeze from '@/utilities/deep-freeze'
 import type { POJO } from '@/utilities/schemer/schemer.types'
 
-export default class ECS {
+export default class DefaultECS extends ECS {
   #nextEntityId = 1
   #revision = 0
   #activeEntities = new Set<number>()
@@ -29,18 +30,19 @@ export default class ECS {
   #nonSerializedComponents = new Set<ComponentName>()
 
   #systems = new Map<string, System>()
-  #logger: Logger
   #defaultSystemPriority: number
   #readonlyFacade: EcsReadonlyFacade | undefined
 
-  constructor(logger?: Logger, defaultSystemPriority = 50) {
-    this.#logger = logger ?? new DefaultLogger()
+  constructor(ctx: EngineContext, config: EcsConfig) {
+    super(ctx, config)
+
+    const { defaultSystemPriority = 50 } = config
 
     // Bootstrap required system components
     this.#components.set(SYSTEM_SCHEMA_COMPONENTS.tags, new Map())
     this.#components.set(SYSTEM_SCHEMA_COMPONENTS.meta, new Map())
     this.#components.set(SYSTEM_SCHEMA_COMPONENTS.noun, new Map())
-    this.#logger.debug('ECS initialized with built-in Tags, Meta, and Noun components')
+    this.ctx.logger.debug('ECS initialized with built-in Tags, Meta, and Noun components')
 
     this.#defaultSystemPriority = defaultSystemPriority
   }
@@ -59,7 +61,8 @@ export default class ECS {
 
   get readonlyFacade(): EcsReadonlyFacade {
     if (!this.#readonlyFacade) {
-      this.#logger.debug('Creating readonly facade')
+      this.ctx.logger.debug('Creating readonly facade')
+
       this.#readonlyFacade = deepFreeze({
         entityExists: this.entityExists.bind(this),
         entityHasComponent: this.entityHasComponent.bind(this),
@@ -69,6 +72,8 @@ export default class ECS {
         getEntityByPrettyId: this.getEntityByPrettyId.bind(this),
         getActiveEntities: this.getActiveEntities.bind(this),
         getAllEntityComponentData: this.getAllEntityComponentData.bind(this),
+        getEntityComponentRevision: this.getEntityComponentRevision.bind(this),
+        getDirtyEntitiesByComponentRevision: this.getDirtyEntitiesByComponentRevision.bind(this),
       })
     }
 
@@ -83,11 +88,11 @@ export default class ECS {
     if (!this.#activeEntities.has(entity)) {
       if (entity < 1 || entity >= this.#nextEntityId) {
         const err = `Can't ${entityOperation} entity ${entity}; entity does not exist`
-        this.#logger.errorAndThrow(err)
+        this.ctx.logger.errorAndThrow(err)
       }
 
       const err = `Can't ${entityOperation} entity ${entity}; entity is destroyed`
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
   }
 
@@ -103,8 +108,8 @@ export default class ECS {
     const componentRevisionsMap = this.#entityRevisions.getOrInsert(entity, new Map())
     componentRevisionsMap.set(component, this.#revision)
 
-    this.#logger.debug(`Incrementing ECS revision to ${this.#revision}`)
-    this.#logger.silly`Updated entity ${entity} -> component ${component} last modified revision version to ${this.#revision}`
+    this.ctx.logger.debug(`Incrementing ECS revision to ${this.#revision}`)
+    this.ctx.logger.silly`Updated entity ${entity} -> component ${component} last modified revision version to ${this.#revision}`
   }
 
   loadSerializedState(
@@ -146,7 +151,7 @@ export default class ECS {
     this.#components = components
     this.#prettyIdMap = prettyIdMap
 
-    this.#logger.info('ECS successfully hydrated with serialized state')
+    this.ctx.logger.info('ECS successfully hydrated with serialized state')
   }
 
   exportSerializedState(metadata: EcsStateEnvelopeMeta): string {
@@ -175,7 +180,7 @@ export default class ECS {
 
   isComponent(name: string): name is ComponentName {
     const result = this.#components.has(name as ComponentName)
-    this.#logger.debug(`isComponent("${name}"): ${result}`)
+    this.ctx.logger.debug(`isComponent("${name}"): ${result}`)
     return result
   }
 
@@ -185,7 +190,7 @@ export default class ECS {
   ) {
     if (this.#components.has(name)) {
       const err = `Error registering component ${String(name)}: a component by that name is already registered`
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
 
     if (!serialize) {
@@ -193,7 +198,7 @@ export default class ECS {
     }
 
     this.#components.set(name, new Map())
-    this.#logger.info(`Component "${name}" registered`)
+    this.ctx.logger.info(`Component "${name}" registered`)
 
     return name
   }
@@ -201,22 +206,22 @@ export default class ECS {
   deregisterComponent(name: ComponentName) {
     if (!this.#components.has(name)) {
       const err = `Error deregistering component ${name}: no component by that name is registered`
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
 
     this.#components.delete(name)
-    this.#logger.info(`Component "${name}" deregistered`)
+    this.ctx.logger.info(`Component "${name}" deregistered`)
   }
 
   createEntity(metaId?: string, noun?: string) {
     if (metaId && this.#prettyIdMap.has(metaId)) {
       const err = `Cannot register new entity with pretty ID ${metaId}; entity ${this.#prettyIdMap.get(metaId)} is already assigned that ID`
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
     const id = this.#nextEntityId++
 
     this.#activeEntities.add(id)
-    this.#logger.debug(`Entity ${id} added to active set`)
+    this.ctx.logger.debug(`Entity ${id} added to active set`)
 
     const metaIdToSet = metaId || `entity_${id}`
 
@@ -232,7 +237,7 @@ export default class ECS {
 
     if (noun) {
       this.setComponentOnEntity(id, SYSTEM_SCHEMA_COMPONENTS.noun, { noun })
-      this.#logger.debug(`Set noun ${noun} on entity ${id}`)
+      this.ctx.logger.debug(`Set noun ${noun} on entity ${id}`)
     }
 
     const componentRevisionsMap = this.#entityRevisions.getOrInsert(id, new Map())
@@ -241,7 +246,7 @@ export default class ECS {
       componentRevisionsMap.set(component as ComponentName, this.#revision)
     }
 
-    this.#logger.info(`Entity ${id} created (metaId: "${metaIdToSet}")`)
+    this.ctx.logger.info(`Entity ${id} created (metaId: "${metaIdToSet}")`)
 
     return id
   }
@@ -252,22 +257,22 @@ export default class ECS {
     if (this.#systems.has(name)) {
       const err = `Cannot register system: system with name ${name} is already registered`
 
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
 
     this.#systems.set(name, system)
-    this.#logger.info(`System ${name} has been registered`)
+    this.ctx.logger.info(`System ${name} has been registered`)
   }
 
   deregisterSystem(systemName: string) {
     if (!this.#systems.has(systemName)) {
       const err = `Cannot deregister system: system with name ${systemName} is not registered`
 
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
 
     this.#systems.delete(systemName)
-    this.#logger.info(`System ${systemName} has been deregistered`)
+    this.ctx.logger.info(`System ${systemName} has been deregistered`)
   }
 
   // destructive; overwrites existing component data, if any
@@ -275,10 +280,12 @@ export default class ECS {
     entity: Entity,
     name: ComponentName,
     data: ActiveComponentSchema[ComponentName],
-  ): void {
+  ) {
+    this.#assertEntityExists(entity, 'set component on')
+
     const systemComponents: readonly string[] = Object.values(SYSTEM_SCHEMA_COMPONENTS)
     if (systemComponents.includes(name)) {
-      this.#logger.warn(
+      this.ctx.logger.warn(
         `Setting component ${name} on entity ${entity}; component is a system component, and modifying its data may result in unexpected behavior.`,
       )
     }
@@ -287,14 +294,12 @@ export default class ECS {
 
     if (!store) {
       const err = `Can't set component on entity ${entity}; unknown component type: ${name}`
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
 
-    this.#assertEntityExists(entity, 'set component on')
-
     store.set(entity, structuredClone(data))
-    this.#logger.debug(`Set component "${name}" data on entity ${entity}`)
-    this.#logger.silly`Set component "${name}" data on entity ${entity}: ${data}`
+    this.ctx.logger.debug(`Set component "${name}" data on entity ${entity}`)
+    this.ctx.logger.silly`Set component "${name}" data on entity ${entity}: ${data}`
 
     this.#incrementRevision(entity, name)
   }
@@ -307,7 +312,7 @@ export default class ECS {
   ) {
     const systemComponents: readonly string[] = Object.values(SYSTEM_SCHEMA_COMPONENTS)
     if (systemComponents.includes(name)) {
-      this.#logger.warn(
+      this.ctx.logger.warn(
         `Updating data for component ${name} for entity ${entity}: component is a system component, and modifying its data may result in unexpected behavior.`,
       )
     }
@@ -318,18 +323,18 @@ export default class ECS {
 
     if (!store) {
       const err = `Can't update component data for entity ${entity}; Unknown component type: ${name}`
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
 
     const existingComponentData = store.get(entity)
 
     if (!existingComponentData) {
       const err = `Can't update component data for entity ${entity}; entity does not have component ${name}`
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
 
-    this.#logger.debug(`Merging component "${name}" data on entity ${entity}`)
-    this.#logger.silly`Merging component "${name}" data on entity ${entity}: ${data}`
+    this.ctx.logger.debug(`Merging component "${name}" data on entity ${entity}`)
+    this.ctx.logger.silly`Merging component "${name}" data on entity ${entity}: ${data}`
 
     store.set(entity, {
       ...existingComponentData,
@@ -345,7 +350,7 @@ export default class ECS {
   ) {
     const systemComponents: readonly string[] = Object.values(SYSTEM_SCHEMA_COMPONENTS)
     if (systemComponents.includes(componentType)) {
-      this.#logger.warn(
+      this.ctx.logger.warn(
         `Removing component ${componentType} from entity ${entity}: component is a system component, and modifying its data may result in unexpected behavior.`,
       )
     }
@@ -356,13 +361,13 @@ export default class ECS {
 
     if (!store) {
       const err = `Can't remove component from entity ${entity}; unknown component type: ${componentType}`
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
 
     store.delete(entity)
     this.#entityRevisions.delete(entity)
     this.#incrementRevision()
-    this.#logger.debug(`Removed component "${componentType}" from entity ${entity}`)
+    this.ctx.logger.debug(`Removed component "${componentType}" from entity ${entity}`)
 
   }
 
@@ -408,11 +413,11 @@ export default class ECS {
 
     if (!store || !componentData) {
       const err = `Can't get component data for entity ${entity}; entity does not have component ${name}`
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
 
-    this.#logger.debug(`Retrieved component "${name}" data for entity ${entity}`)
-    this.#logger.silly`Retrieved component "${name}" data for entity ${entity}: ${componentData}`
+    this.ctx.logger.debug(`Retrieved component "${name}" data for entity ${entity}`)
+    this.ctx.logger.silly`Retrieved component "${name}" data for entity ${entity}: ${componentData}`
 
     return structuredClone(componentData as ActiveComponentSchema[Component])
   }
@@ -424,10 +429,10 @@ export default class ECS {
 
     if (!component) {
       const err = `Can't check for component presence on entity ${entity}; component ${componentType} does not exist`
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
     const result = component.has(entity)
-    this.#logger.debug(`entityHasComponent(${entity}, "${componentType}"): ${result}`)
+    this.ctx.logger.debug(`entityHasComponent(${entity}, "${componentType}"): ${result}`)
     return result
   }
 
@@ -437,19 +442,19 @@ export default class ECS {
     const components = Array.from(this.#components).flatMap(([componentName]) =>
       this.entityHasComponent(entity, componentName) ? [componentName] : [],
     )
-    this.#logger.debug(`Components on entity ${entity}: [${components.join(', ')}]`)
+    this.ctx.logger.debug(`Components on entity ${entity}: [${components.join(', ')}]`)
     return new Set(components)
   }
 
   getEntitiesByComponents(...componentTypes: ComponentName[]): Set<Entity> {
     if (componentTypes.length === 0) return new Set()
 
-    this.#logger.debug(`Querying entities by components: [${componentTypes.join(', ')}]`)
+    this.ctx.logger.debug(`Querying entities by components: [${componentTypes.join(', ')}]`)
 
     if (!componentTypes.every((type) => this.isComponent(type))) {
       const missingTypes = componentTypes.filter((type) => !this.isComponent(type))
       const err = `Cannot get entities by component: given components ${missingTypes.join(', ')} do not exist`
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
 
     const sortedTypes = componentTypes.toSorted((a, b) => {
@@ -460,13 +465,13 @@ export default class ECS {
 
     if (!smallestType) {
       const err = 'Failed to sort component types'
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
     const smallestStore = this.#components.get(smallestType)
 
     if (!smallestStore || smallestStore.size === 0) return new Set()
 
-    this.#logger.debug(
+    this.ctx.logger.debug(
       `Using "${smallestType}" as smallest store (size: ${smallestStore.size}) for intersection`,
     )
 
@@ -477,7 +482,7 @@ export default class ECS {
       if (hasAll) result.push(entity)
     }
 
-    this.#logger.debug(`Query result: [${result.join(', ')}] (${result.length} entities)`)
+    this.ctx.logger.debug(`Query result: [${result.join(', ')}] (${result.length} entities)`)
 
     return new Set(result)
   }
@@ -489,10 +494,10 @@ export default class ECS {
 
     if (!prettyId) {
       const err = `Critical error: Attempting to destroy entity ${entity}, but it has no pretty ID. All entities must have the Meta component and a pretty ID.`
-      this.#logger.errorAndThrow(err)
+      this.ctx.logger.errorAndThrow(err)
     }
 
-    this.#logger.debug(`Destroying entity ${entity}; clearing all component data`)
+    this.ctx.logger.debug(`Destroying entity ${entity}; clearing all component data`)
 
     for (const store of this.#components.values()) {
       store.delete(entity)
@@ -500,24 +505,24 @@ export default class ECS {
 
     this.#activeEntities.delete(entity)
     this.#prettyIdMap.delete(prettyId)
-    this.#logger.info(`Entity ${entity} destroyed`)
+    this.ctx.logger.info(`Entity ${entity} destroyed`)
   }
 
   getEntityByPrettyId(id: string) {
     const entity = this.#prettyIdMap.get(id)
-    this.#logger.debug(`getEntityByPrettyId("${id}"): ${entity ?? 'not found'}`)
+    this.ctx.logger.debug(`getEntityByPrettyId("${id}"): ${entity ?? 'not found'}`)
     return entity
   }
 
   entityExists(id: number) {
     const result = this.#activeEntities.has(id)
-    this.#logger.debug(`entityExists(${id}): ${result}`)
+    this.ctx.logger.debug(`entityExists(${id}): ${result}`)
 
     return result
   }
 
   getActiveEntities() {
-    this.#logger.silly`Active entities: ${this.#activeEntities}`
+    this.ctx.logger.silly`Active entities: ${this.#activeEntities}`
 
     return structuredClone(this.#activeEntities)
   }
@@ -526,21 +531,35 @@ export default class ECS {
     this.#assertEntityExists(entity, 'get component revision')
 
     if (!this.entityHasComponent(entity, component)) {
-      this.#logger.errorAndThrow(`Attempted to get revision version for entity ${entity} -> component ${component}, but entity does not have component`)
+      this.ctx.logger.errorAndThrow(`Attempted to get revision version for entity ${entity} -> component ${component}, but entity does not have component`)
     }
 
     const componentRevisionsMap = this.#entityRevisions.get(entity)
 
     if (!componentRevisionsMap) {
-      this.#logger.errorAndThrow(`Attempted to get revision version for entity ${entity} -> component ${component}, but entity does not exist in the revisions map. This is likely an internal engine bug.`)
+      this.ctx.logger.errorAndThrow(`Attempted to get revision version for entity ${entity} -> component ${component}, but entity does not exist in the revisions map. This is likely an internal engine bug.`)
     }
 
     const revision = componentRevisionsMap.get(component)
 
     if (typeof revision === 'undefined') {
-      this.#logger.errorAndThrow(`Attempted to get revision version for entity ${entity} -> component ${component}, but component does not exist in the entity's entry in the revisions map. This is likely an internal engine bug.`)
+      this.ctx.logger.errorAndThrow(`Attempted to get revision version for entity ${entity} -> component ${component}, but component does not exist in the entity's entry in the revisions map. This is likely an internal engine bug.`)
     }
 
     return revision
+  }
+
+  getDirtyEntitiesByComponentRevision(component: ComponentName, lastRevision: Revision) {
+    const dirty = new Set<Entity>()
+
+    for (const [entity, componentRevisions] of this.#entityRevisions.entries()) {
+      const componentRevision = componentRevisions.get(component)
+
+      if (typeof componentRevision !== 'undefined' && componentRevision > lastRevision) {
+        dirty.add(entity)
+      }
+    }
+
+    return dirty
   }
 }

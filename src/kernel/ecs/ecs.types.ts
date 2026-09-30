@@ -1,5 +1,5 @@
+import type { EngineContext } from '@/engine/engine.types'
 import type { Logger } from '@/helpers/logger/logger.types'
-import type ECS from '@/kernel/ecs/ecs'
 import type { SalienceCacheData } from '@/kernel/ecs/systems/salience/salience.types'
 import type { SemanticCacheData } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.types'
 import type { POJO } from '@/utilities/schemer/schemer.types'
@@ -10,6 +10,91 @@ declare global {
 
 export type Entity = number
 export type Revision = number
+
+export interface EcsConfig {
+  defaultSystemPriority?: number
+}
+
+export abstract class ECS {
+  constructor(
+    protected readonly ctx: EngineContext,
+    protected readonly config: EcsConfig
+  ) {}
+
+  abstract get systems(): readonly System[]
+  abstract get readonlyFacade(): EcsReadonlyFacade
+  abstract get currentRevision(): Revision
+
+  abstract loadSerializedState(
+    stateString: string,
+    validateMetadata: (meta: EcsStateEnvelopeMeta) => boolean,
+  ): void
+
+  abstract exportSerializedState(metadata: EcsStateEnvelopeMeta): string
+
+  abstract isComponent(name: string): name is ComponentName
+
+  abstract registerComponent(
+    name: ComponentName,
+    opts: ComponentRegistrationOptions,
+  ): void
+
+  abstract deregisterComponent(name: ComponentName): void
+
+  abstract createEntity(metaId?: string, noun?: string): void
+
+  abstract registerSystem(system: System): void
+
+  abstract deregisterSystem(systemName: string): void
+
+  abstract setComponentOnEntity(
+    entity: Entity,
+    name: ComponentName,
+    data: ActiveComponentSchema[ComponentName],
+  ): void
+
+  abstract updateComponentData<Component extends ComponentName>(
+    entity: Entity,
+    name: Component,
+    data: Partial<ActiveComponentSchema[Component]>,
+  ): void
+
+  abstract removeComponentFromEntity<Component extends ComponentName>(
+    entity: Entity,
+    componentType: Component,
+  ): void
+
+  abstract getAllEntityComponentData(entity: Entity): Partial<{
+    [Component in ComponentName]: ActiveComponentSchema[Component]
+  }>
+
+  abstract getEntityComponentData<Component extends MandatoryComponent>(
+    entity: Entity,
+    name: Component,
+  ): ActiveComponentSchema[Component]
+  abstract getEntityComponentData<Component extends ComponentName>(
+    entity: Entity,
+    name: Component,
+  ): ActiveComponentSchema[Component] | undefined
+
+  abstract entityHasComponent(entity: Entity, componentType: ComponentName): boolean
+
+  abstract getComponentsOnEntity(entity: Entity): Set<ComponentName>
+
+  abstract getEntitiesByComponents(...componentTypes: ComponentName[]): Set<Entity>
+
+  abstract destroyEntity(entity: Entity): void
+
+  abstract getEntityByPrettyId(id: string): Entity | undefined
+
+  abstract entityExists(id: number): boolean
+
+  abstract getActiveEntities(): Set<Entity>
+
+  abstract getEntityComponentRevision(entity: Entity, component: ComponentName): Revision
+
+  abstract getDirtyEntitiesByComponentRevision(component: ComponentName, lastRevision: Revision): Set<Entity>
+}
 
 export const SYSTEM_SCHEMA_COMPONENTS = {
   tags: 'Tags',
@@ -108,6 +193,7 @@ export interface EcsReadonlyFacade {
   ): Partial<{ [K in keyof ActiveComponentSchema & string]: ActiveComponentSchema[K] }>
   getActiveEntities(): Set<Entity>
   getEntityComponentRevision(entity: Entity, component: ComponentName): Revision
+  getDirtyEntitiesByComponentRevision(component: ComponentName, lastRevision: Revision): Set<Entity>
 }
 
 export interface System {

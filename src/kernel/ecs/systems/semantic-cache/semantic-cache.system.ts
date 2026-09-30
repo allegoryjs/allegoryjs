@@ -13,6 +13,9 @@ import {
   type EngineComponentSchema,
   type Entity,
   InitializableSystem,
+  type ComponentName,
+  type ActiveComponentSchema,
+  type Revision,
 } from '@/kernel/ecs/ecs.types'
 import type {
   DescriptorCacheEntry,
@@ -21,8 +24,8 @@ import type {
 
 const DESCRIPTOR_DELIMITER = ';;'
 
-function aggregateDescriptors<ComponentSchema extends EngineComponentSchema>(
-  descriptors: Map<keyof ComponentSchema & string, string>,
+function aggregateDescriptors(
+  descriptors: Map<ComponentName, string>,
 ): DescriptorCacheEntry {
   return {
     combined: Array.from(descriptors).reduce(
@@ -70,35 +73,31 @@ function aggregateDescriptors<ComponentSchema extends EngineComponentSchema>(
  * you might attach a Noun to the goblin, "goblin"; the vectors cached by this system will include it like
  * "goblin: health level: 33, status effects: poisoned, blessed" per chunk.
  */
-export class SemanticCacheSystem<
-  ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
-  EventMapType extends SystemEventMap<ComponentSchema> = SystemEventMap<ComponentSchema>,
-> extends InitializableSystem<ComponentSchema> {
+export class SemanticCacheSystem extends InitializableSystem {
   #initialized = false
-  #ecs: ECS<ComponentSchema>
-  #eventBus: EventBus<ComponentSchema, EventMapType>
-  #resolvers: Map<keyof ComponentSchema & string, (componentData: any) => string>
+  #ecs: ECS
+  #currentRevision: Revision
+  #resolvers: Map<ComponentName, (componentData: any) => string>
   #vectorize: (text: string) => number[]
   #descriptorAggregator: (
-    descriptors: Map<keyof ComponentSchema & string, string>,
+    descriptors: Map<ComponentName, string>,
   ) => DescriptorCacheEntry
   logger: Logger
 
   constructor({
     ecs,
-    eventBus,
     vectorize,
     logger,
     customDescriptorAggregator,
-  }: SemanticCacheConfig<ComponentSchema, EventMapType>) {
+  }: SemanticCacheConfig) {
     super()
     this.#ecs = ecs
-    this.#eventBus = eventBus
     this.#vectorize = vectorize
 
+
     this.logger = logger ?? new DefaultLogger()
-    this.#resolvers = new Map<keyof ComponentSchema & string, (componentData: any) => string>()
-    this.#descriptorAggregator = customDescriptorAggregator ?? aggregateDescriptors<ComponentSchema>
+    this.#resolvers = new Map<ComponentName, (componentData: ActiveComponentSchema[ComponentName]) => string>()
+    this.#descriptorAggregator = customDescriptorAggregator ?? aggregateDescriptors
   }
 
   get name() {
@@ -125,10 +124,7 @@ export class SemanticCacheSystem<
   }
 
   async onInit() {
-    this.#eventBus.subscribe(
-      DEFAULT_EMIT_STREAMS.ecsComponentModified,
-      this.#handleComponentModified,
-    )
+    this.#currentRevision = this.#ecs.currentRevision
     this.#ecs.registerComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache)
     this.#buildCache()
     this.#initialized = true
@@ -136,11 +132,6 @@ export class SemanticCacheSystem<
   }
 
   async onDispose() {
-    this.#eventBus.unsubscribe(
-      DEFAULT_EMIT_STREAMS.ecsComponentModified,
-      this.#handleComponentModified,
-    )
-
     this.#ecs.deregisterComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache)
 
     this.logger.info(
@@ -148,9 +139,9 @@ export class SemanticCacheSystem<
     )
   }
 
-  registerResolver<K extends keyof ComponentSchema & string>(
+  registerResolver<K extends ComponentName>(
     componentName: K,
-    resolver: (componentData: Readonly<ComponentSchema[K]>) => string,
+    resolver: (componentData: Readonly<ActiveComponentSchema[K]>) => string,
   ) {
     if (this.#resolvers.has(componentName)) {
       this.logger.info(`Replacing existing resolver for component ${componentName}`)
@@ -169,7 +160,7 @@ export class SemanticCacheSystem<
     }
   }
 
-  deregisterResolver<K extends keyof ComponentSchema & string>(componentName: K) {
+  deregisterResolver<K extends ComponentName>(componentName: K) {
     if (!this.#resolvers.has(componentName)) {
       this.logger.warn(
         `Cannot deregister resolver for component ${componentName}; resolver not registered`,
@@ -200,24 +191,22 @@ export class SemanticCacheSystem<
       this.logger.errorAndThrow(err)
     }
 
-    const componentDescriptors: Map<keyof ComponentSchema & string, string> = new Map()
+    const componentDescriptors: Map<ComponentName, string> = new Map()
 
     const componentData = this.#ecs.getAllEntityComponentData(entity)
 
     for (const [componentName, data] of Object.entries(componentData)) {
-      const resolver = this.#resolvers.get(componentName)
+      const resolver = this.#resolvers.get(componentName as ComponentName)
       if (resolver) {
-        componentDescriptors.set(componentName, resolver(data))
+        componentDescriptors.set(componentName as ComponentName, resolver(data))
       }
     }
 
     if (componentDescriptors.size === 0) {
-      this.logger.info(
-        `
+      this.logger.info(`
         Attempted to build cache for entity ${entity}, but entity has no components which have corresponding resolvers.
         Removing Semantic Cache component from entity, as the resulting descriptor cache would be empty
-      `.trim(),
-      )
+      `.trim())
 
       this.#ecs.removeComponentFromEntity(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
 
@@ -229,15 +218,17 @@ export class SemanticCacheSystem<
       (descriptor) => [descriptor, this.#vectorize(descriptor)] as [string, number[]],
     )
 
-    this.#ecs.setComponentOnEntity(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, {
+    const cacheEntry = {
       dirty: false,
       fullDescriptor: aggregated.combined,
       fullVector: this.#vectorize(aggregated.combined),
       chunks,
-    })
+    }
+
+    this.#ecs.setComponentOnEntity(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, cacheEntry)
 
     this.logger.debug(`Built semantic cache for entity ${entity}`)
-    this.logger.silly`Semantic cache for entity ${entity}: ${aggregated}`
+    this.logger.silly`Semantic cache for entity ${entity}: ${cacheEntry}`
   }
 
   #buildCache() {

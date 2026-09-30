@@ -2,19 +2,15 @@ import type EventBus from '@/helpers/event-bus/event-bus'
 import type { SystemEventMap } from '@/helpers/event-bus/event-bus.types'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
-import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
+import type { ComponentName, EngineComponentSchema } from '@/kernel/ecs/ecs.types'
 
-export interface SemanticCacheConfig<
-  ComponentSchema extends EngineComponentSchema = EngineComponentSchema,
-  EventMapType extends SystemEventMap<ComponentSchema> = SystemEventMap<ComponentSchema>,
-> {
-  ecs: ECS<ComponentSchema>
-  eventBus: EventBus<ComponentSchema, EventMapType>
+export interface SemanticCacheConfig {
+  ecs: ECS
   vectorize: (text: string) => number[]
 
   logger?: Logger
   customDescriptorAggregator?: (
-    descriptors: Map<keyof ComponentSchema & string, string>,
+    descriptors: Map<ComponentName, string>,
   ) => DescriptorCacheEntry
 }
 

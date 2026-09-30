@@ -1,21 +1,24 @@
-import type { Logger, LoggerChannelOpts, LoggerLevels } from '@/helpers/logger/logger.types'
+import { Logger, type LoggerConfig, type LoggerLevels } from '@/helpers/logger/logger.types'
 
 /**
  * Responsible for logging messages. Defaults to always printing warnings and errors.
  */
-export class DefaultLogger implements Logger {
+export class DefaultLogger extends Logger {
   #enableInfo: boolean
   #enableDebug: boolean
   #enableError: boolean
   #enableWarn: boolean
   #enableSilly: boolean
 
-  constructor(opts: Partial<LoggerChannelOpts> = {}) {
-    this.#enableSilly = opts.silly ?? false
-    this.#enableDebug = opts.debug ?? false
-    this.#enableInfo = opts.info ?? false
-    this.#enableWarn = opts.warn ?? true
-    this.#enableError = opts.error ?? true
+  constructor(config?: LoggerConfig) {
+    super(config)
+
+    const { channelOpts } = config ?? {}
+    this.#enableSilly = channelOpts?.silly ?? false
+    this.#enableDebug = channelOpts?.debug ?? false
+    this.#enableInfo  = channelOpts?.info  ?? false
+    this.#enableWarn  = channelOpts?.warn  ?? true
+    this.#enableError = channelOpts?.error ?? true
   }
 
   setLevel(level: LoggerLevels) {

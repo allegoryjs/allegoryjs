@@ -1,4 +1,4 @@
-import type { Logger } from '@/helpers/logger/logger.types'
+import type { EngineContext } from '@/engine/engine.types'
 import type { Entity } from '@/kernel/ecs/ecs.types'
 
 declare global {
@@ -44,6 +44,27 @@ export type ActiveEventMap = CustomEventMap & SystemEventMap
 export type EmitStream = keyof ActiveEventMap
 export type EventPayload<Stream extends EmitStream> = ActiveEventMap[Stream]
 
+export abstract class EventBus {
+  constructor(
+    protected ctx: EngineContext,
+    protected config?: EventBusConfig
+  ) {}
+
+  abstract subscribe<Stream extends EmitStream>(stream: Stream, cb: Listener<Stream>): Disposer
+  abstract subscribe(stream: typeof WILDCARD | `${string}:*`, cb: Listener<any>): Disposer
+
+  abstract unsubscribe(stream: string, cb?: Listener<any>): void
+
+  abstract emit<Stream extends EmitStream>(
+    stream: Stream,
+    payload: EventPayload<Stream>,
+  ): Promise<void>
+
+  abstract clear(): void
+
+  abstract dispose(): void
+}
+
 export interface EngineEvent<Stream extends EmitStream> {
   timestamp: number
   payload: EventPayload<Stream>
@@ -54,7 +75,6 @@ export type Listener<Stream extends EmitStream> = (
 ) => void | Promise<void>
 
 export interface EventBusConfig {
-  logger?: Logger
   debug?: boolean
 }
 
