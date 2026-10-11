@@ -11,7 +11,7 @@ import type { LawContext } from '@/kernel/intent-pipeline/intent-pipeline'
 import IntentPipeline from '@/kernel/intent-pipeline/intent-pipeline'
 import {
   ContributionStatus,
-  LawLayer,
+  LAW_LAYER,
   type IntentClassificationModule,
   type IntentClassificationResponse,
   type IntentPipelineConfig,
@@ -175,7 +175,7 @@ describe('Intent Pipeline', () => {
 
       // register a Law which handles TEST_INTENT
       const testLaw: Law<TestSchema> = {
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'test-law',
         intents: [intentName],
         apply: lawApplyMock,
@@ -233,14 +233,14 @@ describe('Intent Pipeline', () => {
       }))
 
       const highLayerLaw = {
-        layer: LawLayer.Core + 1,
+        layer: LAW_LAYER.core + 1,
         name: 'high-layer-law',
         intents: [intentName],
         apply: highLayerApply,
         matchers: [{ actor: { ids: [actorEntityId] } }],
       }
       const lowLayerLaw = {
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'low-layer-law',
         intents: [intentName],
         apply: lowLayerApply,
@@ -273,14 +273,14 @@ describe('Intent Pipeline', () => {
         status: ContributionStatus.pass,
       }))
       const highLayerLaw = {
-        layer: LawLayer.Core + 1,
+        layer: LAW_LAYER.core + 1,
         name: 'high-layer-law-fallback',
         intents: ['other-intent'],
         apply: highLayerApply,
         matchers: [{ actor: { ids: [actorEntityId] } }],
       }
       const lowLayerLaw = {
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'low-layer-law-fallback',
         intents: [intentName],
         apply: lowLayerApply,
@@ -311,7 +311,7 @@ describe('Intent Pipeline', () => {
       const actorEntityId = 3
       const lawApply = mock().mockImplementationOnce(() => ({ status: ContributionStatus.pass }))
       const testLaw = {
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'repeal-law',
         intents: [intentName],
         apply: lawApply,
@@ -341,7 +341,7 @@ describe('Intent Pipeline', () => {
       const actorEntityId = 4
       const lawApply = mock().mockImplementationOnce(() => ({ status: ContributionStatus.pass }))
       const testLaw: Law<TestSchema> = {
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'component-law',
         intents: [intentName],
         apply: lawApply,
@@ -370,7 +370,7 @@ describe('Intent Pipeline', () => {
       const actorEntityId = 5
       const lawApply = mock().mockImplementationOnce(() => ({ status: ContributionStatus.pass }))
       const testLaw = {
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'prop-law',
         intents: [intentName],
         apply: lawApply,
@@ -411,7 +411,7 @@ describe('Intent Pipeline', () => {
       const actorEntityId = 6
       const lawApply = mock().mockImplementationOnce(() => ({ status: ContributionStatus.pass }))
       const testLaw = {
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'tag-law',
         intents: [intentName],
         apply: lawApply,
@@ -446,7 +446,7 @@ describe('Intent Pipeline', () => {
         return { status: ContributionStatus.pass }
       })
       const testLaw = {
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'dry-run-law',
         intents: [intentName],
         apply: lawApply,
@@ -473,7 +473,7 @@ describe('Intent Pipeline', () => {
       const actorEntityId = 7
 
       const testLaw: Law<TestSchema> = {
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'dry-run-execution-law',
         intents: [intentName],
         apply: (_ctx) =>
@@ -527,7 +527,7 @@ describe('Intent Pipeline', () => {
       const actorEntityId = 7
 
       const testLaw: Law<TestSchema> = {
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'normal-run-execution-law',
         intents: [intentName],
         apply: (_ctx) =>
@@ -599,14 +599,14 @@ describe('Intent Pipeline', () => {
       const lawApply1 = mock().mockImplementationOnce(() => ({ status: ContributionStatus.pass }))
       const lawApply2 = mock().mockImplementationOnce(() => ({ status: ContributionStatus.pass }))
       const law1 = {
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'multi-law-1',
         intents: [intentName],
         apply: lawApply1,
         matchers: [{ actor: { ids: [actorEntityId] } }],
       }
       const law2 = {
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'multi-law-2',
         intents: [intentName],
         apply: lawApply2,
@@ -639,14 +639,14 @@ describe('Intent Pipeline', () => {
         status: ContributionStatus.completed,
       }))
       const rejectLaw = {
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'reject-law',
         intents: [intentName],
         apply: rejectApply,
         matchers: [{ actor: { ids: [actorEntityId] } }],
       }
       const completeLaw = {
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'complete-law',
         intents: [intentName],
         apply: completeApply,
@@ -705,7 +705,7 @@ describe('Intent Pipeline', () => {
       }))
 
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'alias-law',
         intents: [intentName],
         apply: lawApply,
@@ -744,7 +744,7 @@ describe('Intent Pipeline', () => {
       }))
 
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'bad-alias-law',
         intents: [intentName],
         apply: lawApply,
@@ -778,7 +778,7 @@ describe('Intent Pipeline', () => {
       })
 
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'reorder-law',
         intents: [intentName],
         apply: lawApply,
@@ -824,7 +824,7 @@ describe('Intent Pipeline', () => {
       }))
 
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'contribution-law',
         intents: [intentName],
         apply: lawApply,
@@ -856,14 +856,14 @@ describe('Intent Pipeline', () => {
       const apply2 = mock().mockImplementationOnce(() => ({ status: ContributionStatus.pass }))
 
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'law1',
         intents: [intent1],
         apply: apply1,
         matchers: [{}],
       })
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'law2',
         intents: [intent2],
         apply: apply2,
@@ -893,14 +893,14 @@ describe('Intent Pipeline', () => {
       const apply2 = mock()
 
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'law-reject',
         intents: [intent1],
         apply: apply1,
         matchers: [{}],
       })
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'law-skip',
         intents: [intent2],
         apply: apply2,
@@ -934,7 +934,7 @@ describe('Intent Pipeline', () => {
       }))
 
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'multi-entity-law',
         intents: [intentName],
         apply: lawApply,
@@ -974,7 +974,7 @@ describe('Intent Pipeline', () => {
       const lawApply = mock()
 
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'multi-actor-fail-law',
         intents: [intentName],
         apply: lawApply,
@@ -1014,7 +1014,7 @@ describe('Intent Pipeline', () => {
 
       // Law Generic: cares only about Tag1 (Specificity 2.5)
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'law-generic',
         intents: [intentName],
         apply: lawGenericApply,
@@ -1023,7 +1023,7 @@ describe('Intent Pipeline', () => {
 
       // Law Specific: cares about Tag1 and Tag2 (Specificity 5.0)
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'law-specific',
         intents: [intentName],
         apply: lawSpecificApply,
@@ -1082,7 +1082,7 @@ describe('Intent Pipeline', () => {
       }))
 
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'target-law-generic',
         intents: [intentName],
         apply: lawGenericApply,
@@ -1090,7 +1090,7 @@ describe('Intent Pipeline', () => {
       })
 
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'target-law-specific',
         intents: [intentName],
         apply: lawSpecificApply,
@@ -1133,7 +1133,7 @@ describe('Intent Pipeline', () => {
       const lawApply = mock()
 
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'multi-target-fail-law',
         intents: [intentName],
         apply: lawApply,
@@ -1164,7 +1164,7 @@ describe('Intent Pipeline', () => {
       const lawApply = mock()
 
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'missing-actor-law',
         intents: [intentName],
         apply: lawApply,
@@ -1190,7 +1190,7 @@ describe('Intent Pipeline', () => {
       const lawApply = mock()
 
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'missing-target-law',
         intents: [intentName],
         apply: lawApply,
@@ -1225,7 +1225,7 @@ describe('Intent Pipeline', () => {
       })
 
       ip.ratifyLaw({
-        layer: LawLayer.Core,
+        layer: LAW_LAYER.core,
         name: 'context-getters-law',
         intents: [intentName],
         apply: lawApply,

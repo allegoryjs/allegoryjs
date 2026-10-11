@@ -66,13 +66,16 @@ function aggregateDescriptors(descriptors: Map<ComponentName, string>): Descript
  * "goblin: health level: 33, status effects: poisoned, blessed" per chunk.
  */
 export class SemanticCacheSystem extends InitializableSystem {
+  readonly name = 'SemanticCache'
+
   #ecs: ECS
   #lastSeenRevision: Revision
   #resolvers: ComponentResolverMap
   #staleResolvers: Set<ComponentName>
   #vectorize: (text: string) => number[]
   #descriptorAggregator: (descriptors: Map<ComponentName, string>) => DescriptorCacheEntry
-  logger: Logger
+
+  protected logger: Logger
 
   constructor({ ecs, vectorize, logger, customDescriptorAggregator }: SemanticCacheConfig) {
     super()
@@ -87,11 +90,7 @@ export class SemanticCacheSystem extends InitializableSystem {
     this.#staleResolvers = new Set(this.#resolvers.keys())
   }
 
-  get name() {
-    return 'SemanticCache'
-  }
-
-  async onRun(): Promise<void> {
+  protected async onRun(): Promise<void> {
     if (!this.initialized) {
       this.logger.errorAndThrow(`Cannot run ${this.name} system; system not initialized`)
     }
@@ -137,7 +136,7 @@ export class SemanticCacheSystem extends InitializableSystem {
     this.#staleResolvers.clear()
   }
 
-  async onInit() {
+  protected async onInit() {
     if (this.initialized) {
       this.logger.errorAndThrow(`Cannot initialize ${this.name} system; system already initialized`)
     }
@@ -148,13 +147,13 @@ export class SemanticCacheSystem extends InitializableSystem {
       this.#staleResolvers.add(componentWithResolver)
     }
 
-    this.#ecs.registerComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache)
-    this.initialized = true
+    this.#ecs.registerComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache, { serialize: false })
     await this.onRun()
+    this.initialized = true
     this.logger.info('Semantic Cache System initialized')
   }
 
-  async onDispose() {
+  protected async onDispose() {
     if (!this.initialized) {
       this.logger.errorAndThrow(`Cannot dispose of ${this.name} system; system not initialized`)
     }

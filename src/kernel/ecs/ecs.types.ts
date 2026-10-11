@@ -99,6 +99,7 @@ export const SYSTEM_SCHEMA_COMPONENTS = {
   meta: 'Meta',
   noun: 'Noun',
   semanticCache: 'SemanticCache',
+  salienceCache: 'SalienceCache',
 } as const
 
 export const MANDATORY_COMPONENTS = [
@@ -209,34 +210,34 @@ export abstract class InitializableSystem implements System {
 
   protected initialized = false
 
-  public async init(ecs: ECS): Promise<void> {
+  public async init(): Promise<void> {
     if (this.initialized) {
       this.logger.errorAndThrow(`Cannot initialize ${this.name} system; system already initialized`)
     }
 
-    await this.onInit(ecs)
+    await this.onInit()
   }
 
-  public async dispose(ecs: ECS): Promise<void> {
+  public async dispose(): Promise<void> {
     if (!this.initialized) {
       this.logger.errorAndThrow(`Cannot dispose of ${this.name} system; system not initialized`)
     }
 
-    await this.onDispose(ecs)
+    await this.onDispose()
   }
 
-  public async run(ecs: ECS): Promise<void> {
+  public async run(): Promise<void> {
     if (!this.initialized) {
       this.logger.errorAndThrow(`Cannot run ${this.name} system; system not initialized`)
     }
 
-    await this.onRun(ecs)
+    await this.onRun()
   }
 
   protected abstract logger: Logger
-  protected abstract onInit(ecs: ECS): Promise<void>
-  protected abstract onDispose(ecs: ECS): Promise<void>
-  protected abstract onRun(ecs: ECS): Promise<void>
+  protected abstract onInit(): Promise<void>
+  protected abstract onDispose(): Promise<void>
+  protected abstract onRun(): Promise<void>
 }
 
 export interface EcsState {

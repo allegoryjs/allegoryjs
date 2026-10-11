@@ -1,23 +1,27 @@
+// eztodo need to update types here
+
+
+import { ENGINE_LAYER } from '@/engine/engine.types'
 import type { EngineEvent } from '@/helpers/event-bus/event-bus.types'
 import type { EcsReadonlyFacade, EngineComponentSchema, Entity } from '@/kernel/ecs/ecs.types'
 import type { LawContext } from '@/kernel/intent-pipeline/intent-pipeline'
 
 export const ERR_INTENT_REJECTED = 'intent-rejected'
 
-export enum LawLayer {
+export const LAW_LAYER = {
   /*********************
    *** Engine Layers ***
    *********************/
   // built-in Laws, which typically handle basic functions (like saving) or
   // indicating that the engine does not understand a command,
   // and which are easily overwritten. Typically returns a COMPLETED in the contribution
-  Core = 0,
+  core: ENGINE_LAYER.core,
 
   // Laws coming from world kits, providing the generic functionality which is
   // likely to be used by games in a given genre
   // e.g. for a game using the adventure game world kit, this would include
   // .     things like movement, perception, combat, and inventory
-  Kit = 1,
+  kit: ENGINE_LAYER.kit,
 
   /***********************
    *** Userland Layers ***
@@ -25,12 +29,12 @@ export enum LawLayer {
 
   // Laws related to the specific game being built. The default layer for new Laws created by game devs.
   // e.g. "Taking a Cursed Item deals damage"
-  Game = 2,
+  game: ENGINE_LAYER.game,
 
   // Laws related to a specific entity, attached via Script
   // e.g. "Taking the Idol triggers the boulder trap"
-  Instance = 3,
-}
+  instance: ENGINE_LAYER.instance,
+} as const
 
 export enum ContributionStatus {
   // a law added some flavor and/or added some proposed mutations, but
@@ -75,11 +79,11 @@ export interface IntentClassificationResponse {
   dryRun: boolean
 }
 
-export interface LawContextOpts<ComponentSchema extends EngineComponentSchema> {
+export interface LawContextOpts {
   dryRun: boolean
   actors?: Array<Entity>
   targets?: Array<Entity>
-  ecsUtils: EcsReadonlyFacade<ComponentSchema>
+  ecsUtils: EcsReadonlyFacade
   auxiliary?: Array<Entity>
   originalAuxiliaries?: Array<Entity>
 }
@@ -153,7 +157,7 @@ export interface LawMatcher<ComponentSchema extends EngineComponentSchema> {
 }
 
 export interface Law<ComponentSchema extends EngineComponentSchema> {
-  layer: LawLayer
+  layer: LAW_LAYER
   name: string
   intents: Array<string> // an array of the intent names that the Law cares about
   apply: (ctx: LawContext<ComponentSchema>) => Promise<Contribution<ComponentSchema>>

@@ -20,3 +20,28 @@ export interface EngineContext {
   readonly ecs: ECS
   readonly eventBus: EventBus
 }
+
+export const ENGINE_LAYER = {
+  /*********************
+   *** Engine Layers ***
+   *********************/
+  // built-in operations, which typically handle basic functions (like saving),
+  // which are easily overwritten
+  core: 0,
+
+  // Operations coming from world kits, providing the generic functionality which is
+  // likely to be used by games in a given genre
+  kit: 1,
+
+  /***********************
+   *** Userland Layers ***
+   ***********************/
+
+  // Operations related to the specific game being built.
+  game: 2,
+
+  // Operations related to a specific entity
+  instance: 3,
+} as const
+
+export type EngineLayer = typeof ENGINE_LAYER[keyof typeof ENGINE_LAYER]
