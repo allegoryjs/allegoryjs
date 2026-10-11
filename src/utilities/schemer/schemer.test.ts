@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import schemer from '@/utilities/schemer'
+import * as schemer from './schemer'
 
 describe('schemer utilities', () => {
   describe('isString', () => {
@@ -23,8 +23,8 @@ describe('schemer utilities', () => {
       expect(schemer.isNumber(0)).toBe(true)
       expect(schemer.isNumber(1)).toBe(true)
       expect(schemer.isNumber(-1.5)).toBe(true)
-      expect(schemer.isNumber(NaN)).toBe(true)
-      expect(schemer.isNumber(Infinity)).toBe(true)
+      expect(schemer.isNumber(NaN)).toBe(false)
+      expect(schemer.isNumber(Infinity)).toBe(false)
     })
     it('rejects non-numbers', () => {
       expect(schemer.isNumber('123')).toBe(false)
@@ -126,6 +126,7 @@ describe('schemer utilities', () => {
       expect(schemer.isPojoValue(undefined)).toBe(false)
       expect(schemer.isPojoValue(() => {})).toBe(false)
       expect(schemer.isPojoValue(Symbol('sym'))).toBe(false)
+      expect(schemer.isPojoValue({ test: new Float32Array() })).toBe(false)
     })
   })
 

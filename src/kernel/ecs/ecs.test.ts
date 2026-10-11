@@ -225,6 +225,93 @@ describe('setComponentOnEntity', () => {
       })
     }).toThrow('entity is destroyed')
   })
+
+  test('throws when setting non-POJO data (e.g. Float32Array) on a serializable component by default', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('embedding' as any)
+    const e = ecs.createEntity()
+    expect(() => {
+      ecs.setComponentOnEntity(
+        e,
+        'embedding' as any,
+        {
+          vector: new Float32Array([1.0, 2.0, 3.0]),
+        } as any,
+      )
+    }).toThrow(
+      'Attempted to add non-serializable data (i.e. non-POJO data) for component embedding which is marked as serializable',
+    )
+  })
+
+  test('throws when setting non-POJO data on a component explicitly registered with serialize: true', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('embedding' as any, { serialize: true })
+    const e = ecs.createEntity()
+    expect(() => {
+      ecs.setComponentOnEntity(
+        e,
+        'embedding' as any,
+        {
+          vector: new Float32Array([1.0, 2.0, 3.0]),
+        } as any,
+      )
+    }).toThrow(
+      'for non-POJO data, component must have the "serializable" flag set to false at component registration. Aborting.',
+    )
+  })
+
+  test('throws when setting other non-POJO data types (Map, Set, function, class instance) on a serializable component', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('custom' as any)
+    const e = ecs.createEntity()
+
+    expect(() => {
+      ecs.setComponentOnEntity(e, 'custom' as any, { map: new Map() } as any)
+    }).toThrow('Attempted to add non-serializable data')
+
+    expect(() => {
+      ecs.setComponentOnEntity(e, 'custom' as any, { set: new Set() } as any)
+    }).toThrow('Attempted to add non-serializable data')
+
+    expect(() => {
+      ecs.setComponentOnEntity(e, 'custom' as any, { fn: () => {} } as any)
+    }).toThrow('Attempted to add non-serializable data')
+
+    class CustomData {
+      value = 1
+    }
+    expect(() => {
+      ecs.setComponentOnEntity(e, 'custom' as any, { instance: new CustomData() } as any)
+    }).toThrow('Attempted to add non-serializable data')
+  })
+
+  test('allows setting non-POJO data when component is registered with serialize: false', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('embedding' as any, { serialize: false })
+    const e = ecs.createEntity()
+    const vector = new Float32Array([1.0, 2.0, 3.0])
+
+    ecs.setComponentOnEntity(e, 'embedding' as any, { vector } as any)
+    const retrieved = ecs.getEntityComponentData(e, 'embedding' as any) as any
+
+    expect(retrieved.vector).toEqual(new Float32Array([1.0, 2.0, 3.0]))
+    expect(retrieved.vector).toBeInstanceOf(Float32Array)
+
+    // Verify structuredClone cloned the non-POJO data
+    vector[0] = 999.0
+    expect(retrieved.vector[0]).toBe(1.0)
+  })
+
+  test('allows setting POJO data on a component registered with serialize: false', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('nonSerializedPojo' as any, { serialize: false })
+    const e = ecs.createEntity()
+
+    ecs.setComponentOnEntity(e, 'nonSerializedPojo' as any, { text: 'hello', count: 42 } as any)
+    const retrieved = ecs.getEntityComponentData(e, 'nonSerializedPojo' as any) as any
+
+    expect(retrieved).toEqual({ text: 'hello', count: 42 })
+  })
 })
 
 // ─── updateComponentData ────────────────────────────────────────────
@@ -343,6 +430,102 @@ describe('updateComponentData', () => {
     expect(() => {
       ecs.updateComponentData(e, 'position', { x: 5 })
     }).toThrow('entity does not have component position')
+  })
+
+  test('throws when updating with non-POJO data on a serializable component by default', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('embedding' as any)
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'embedding' as any, { initial: 'data' } as any)
+
+    expect(() => {
+      ecs.updateComponentData(
+        e,
+        'embedding' as any,
+        {
+          vector: new Float32Array([1.0, 2.0, 3.0]),
+        } as any,
+      )
+    }).toThrow(
+      'Attempted to add non-serializable data (i.e. non-POJO data) for component embedding which is marked as serializable',
+    )
+  })
+
+  test('throws when updating with non-POJO data on a component explicitly registered with serialize: true', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('embedding' as any, { serialize: true })
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'embedding' as any, { initial: 'data' } as any)
+
+    expect(() => {
+      ecs.updateComponentData(
+        e,
+        'embedding' as any,
+        {
+          vector: new Float32Array([1.0, 2.0, 3.0]),
+        } as any,
+      )
+    }).toThrow(
+      'for non-POJO data, component must have the "serializable" flag set to false at component registration. Aborting.',
+    )
+  })
+
+  test('throws when updating with various non-POJO types (Map, Set, function, class instance) on a serializable component', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('custom' as any)
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'custom' as any, { initial: 'data' } as any)
+
+    expect(() => {
+      ecs.updateComponentData(e, 'custom' as any, { map: new Map() } as any)
+    }).toThrow('Attempted to add non-serializable data')
+
+    expect(() => {
+      ecs.updateComponentData(e, 'custom' as any, { set: new Set() } as any)
+    }).toThrow('Attempted to add non-serializable data')
+
+    expect(() => {
+      ecs.updateComponentData(e, 'custom' as any, { fn: () => {} } as any)
+    }).toThrow('Attempted to add non-serializable data')
+
+    class CustomData {
+      value = 1
+    }
+    expect(() => {
+      ecs.updateComponentData(e, 'custom' as any, { instance: new CustomData() } as any)
+    }).toThrow('Attempted to add non-serializable data')
+  })
+
+  test('allows updating with non-POJO data when component is registered with serialize: false', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('embedding' as any, { serialize: false })
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'embedding' as any, { label: 'item-1' } as any)
+
+    ecs.updateComponentData(
+      e,
+      'embedding' as any,
+      {
+        vector: new Float32Array([4.0, 5.0, 6.0]),
+      } as any,
+    )
+
+    const retrieved = ecs.getEntityComponentData(e, 'embedding' as any) as any
+    expect(retrieved.label).toBe('item-1')
+    expect(retrieved.vector).toEqual(new Float32Array([4.0, 5.0, 6.0]))
+    expect(retrieved.vector).toBeInstanceOf(Float32Array)
+  })
+
+  test('allows updating with POJO data on a component registered with serialize: false', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('cache' as any, { serialize: false })
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'cache' as any, { a: 1 } as any)
+
+    ecs.updateComponentData(e, 'cache' as any, { b: 2 } as any)
+    const retrieved = ecs.getEntityComponentData(e, 'cache' as any) as any
+
+    expect(retrieved).toEqual({ a: 1, b: 2 })
   })
 })
 

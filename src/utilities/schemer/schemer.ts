@@ -5,7 +5,7 @@ export function isString(thing: unknown): thing is string {
 }
 
 export function isNumber(thing: unknown): thing is number {
-  return typeof thing === 'number'
+  return typeof thing === 'number' && Number.isFinite(thing)
 }
 
 export function isInteger(thing: unknown): thing is number {
@@ -13,7 +13,8 @@ export function isInteger(thing: unknown): thing is number {
     typeof thing === 'number' &&
     thing % 1 === 0 &&
     thing <= Number.MAX_SAFE_INTEGER &&
-    thing >= Number.MIN_SAFE_INTEGER
+    thing >= Number.MIN_SAFE_INTEGER &&
+    !Number.isNaN(thing)
   )
 }
 
@@ -41,14 +42,14 @@ export function isPojoValue(thing: unknown): thing is POJOValue {
 }
 
 export function isPojo(thing: unknown): thing is POJO {
-  return (
-    typeof thing === 'object' &&
-    thing !== null &&
-    !Array.isArray(thing) &&
-    Reflect.ownKeys(thing).every(
-      (k) =>
-        typeof k === 'string' &&
-        isPojoValue((thing as Record<string | symbol, unknown>)[k as string | symbol]),
-    )
+  if (typeof thing !== 'object' || thing === null || Array.isArray(thing)) {
+    return false
+  }
+  const proto = Object.getPrototypeOf(thing)
+  if (proto !== Object.prototype && proto !== null) {
+    return false
+  }
+  return Reflect.ownKeys(thing).every(
+    (k) => typeof k === 'string' && isPojoValue((thing as Record<string, unknown>)[k]),
   )
 }
