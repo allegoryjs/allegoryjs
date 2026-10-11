@@ -13,7 +13,7 @@ export interface ComponentResolverMap extends Omit<Map<ComponentName, any>, 'get
 
 export interface SemanticCacheConfig {
   ecs: ECS
-  vectorize: (text: string) => number[]
+  vectorize: (text: string) => Float32Array
 
   logger?: Logger
   customDescriptorAggregator?: (descriptors: Map<ComponentName, string>) => DescriptorCacheEntry
@@ -26,6 +26,6 @@ export interface DescriptorCacheEntry {
 
 export interface SemanticCacheData {
   fullDescriptor?: string
-  fullVector?: number[]
-  chunks?: [descriptor: string, vector: number[]][]
+  fullVector?: Float32Array
+  chunks?: [descriptor: string, vector: Float32Array][]
 }

@@ -19,6 +19,7 @@ import {
   ECS,
 } from '@/kernel/ecs/ecs.types'
 import deepFreeze from '@/utilities/deep-freeze'
+import { isPojo } from '@/utilities/schemer'
 import type { POJO } from '@/utilities/schemer/schemer.types'
 
 export default class DefaultECS extends ECS {
@@ -302,6 +303,10 @@ export default class DefaultECS extends ECS {
       this.#logger.errorAndThrow(err)
     }
 
+    if (!isPojo(data) && !this.#nonSerializedComponents.has(name)) {
+      this.#logger.errorAndThrow(`Attempted to add non-serializable data (i.e. non-POJO data) for component ${name} which is marked as serializable; for non-POJO data, component must have the "serializable" flag set to false at component registration. Aborting.`)
+    }
+
     store.set(entity, structuredClone(data))
     this.#logger.debug(`Set component "${name}" data on entity ${entity}`)
     this.#logger.silly`Set component "${name}" data on entity ${entity}: ${data}`
@@ -338,8 +343,13 @@ export default class DefaultECS extends ECS {
       this.#logger.errorAndThrow(err)
     }
 
+    if (!isPojo(data) && !this.#nonSerializedComponents.has(name)) {
+      this.#logger.errorAndThrow(`Attempted to add non-serializable data (i.e. non-POJO data) for component ${name} which is marked as serializable; for non-POJO data, component must have the "serializable" flag set to false at component registration. Aborting.`)
+    }
+
     this.#logger.debug(`Merging component "${name}" data on entity ${entity}`)
     this.#logger.silly`Merging component "${name}" data on entity ${entity}: ${data}`
+
 
     store.set(entity, {
       ...existingComponentData,

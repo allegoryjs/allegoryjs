@@ -72,7 +72,7 @@ export class SemanticCacheSystem extends InitializableSystem {
   #lastSeenRevision: Revision
   #resolvers: ComponentResolverMap
   #staleResolvers: Set<ComponentName>
-  #vectorize: (text: string) => number[]
+  #vectorize: (text: string) => Float32Array
   #descriptorAggregator: (descriptors: Map<ComponentName, string>) => DescriptorCacheEntry
 
   protected logger: Logger
@@ -247,7 +247,7 @@ export class SemanticCacheSystem extends InitializableSystem {
 
     const aggregated = this.#descriptorAggregator(componentDescriptors)
     const chunks = aggregated.chunked.map(
-      (descriptor) => [descriptor, this.#vectorize(descriptor)] as [string, number[]],
+      (descriptor) => [descriptor, this.#vectorize(descriptor)] as [string, Float32Array],
     )
 
     const cacheEntry: SemanticCacheData = {
