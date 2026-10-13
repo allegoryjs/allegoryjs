@@ -1,15 +1,15 @@
 import { InitializableSystem, SYSTEM_SCHEMA_COMPONENTS } from '@/kernel/ecs/ecs.types'
-import type { SalienceSystemConfig, SalienceVote, SalienceVoter, VoteChannel, VoterName } from './salience.types'
+import type { SalienceSystemConfig, SalienceVote, SalienceVoter, VoteChannel } from './salience.types'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type { ECS, Entity, Revision } from '@/kernel/ecs/ecs.types'
-import type { EngineLayer } from '@/engine/engine.types'
+import { ENGINE_LAYER, type EngineLayer } from '@/engine/engine.types'
 
 export class SalienceSystem extends InitializableSystem {
   readonly name = 'SalienceSystem'
 
   #ecs: ECS
   #lastSeenRevision: Revision
-  #voters: Set<SalienceVoter>
+  #voters: Set<SalienceVoter> = new Set()
 
   protected logger: Logger
 
@@ -43,32 +43,66 @@ export class SalienceSystem extends InitializableSystem {
       this.logger.errorAndThrow(`Cannot dispose of ${this.name} system; system not initialized`)
     }
 
-    if (this.#lastSeenRevision !== this.#ecs.currentRevision) {
-      const voteData = new Map<VoteChannel, [EngineLayer, SalienceVote]>
+    if (this.#lastSeenRevision === this.#ecs.currentRevision) {
+      this.logger.debug(`In ${this.name}, the last seen ECS revision is the current one; skipping salience cache rebuild`)
+      return
+    }
 
-      const oldCandidates = this.#ecs.getEntitiesByComponents(SYSTEM_SCHEMA_COMPONENTS.salienceCache)
-      const candidates = this.#ecs.getEntitiesByComponents(SYSTEM_SCHEMA_COMPONENTS.noun)
-      const staleCandidates = candidates.difference(oldCandidates)
+    const entityVoteData = new Map<
+      Entity,
+      Map<
+        VoteChannel,
+        Map<EngineLayer, Set<SalienceVote>>
+      >
+    >
 
-      for (const staleEntity of staleCandidates) {
-        this.#ecs.removeComponentFromEntity(staleEntity, SYSTEM_SCHEMA_COMPONENTS.salienceCache)
-      }
+    const oldCandidates = this.#ecs.getEntitiesByComponents(SYSTEM_SCHEMA_COMPONENTS.salienceCache)
+    const candidates = this.#ecs.getEntitiesByComponents(SYSTEM_SCHEMA_COMPONENTS.noun)
+    const staleCandidates = oldCandidates.difference(candidates)
 
-      for (const voter of this.#voters) {
-        const { layer } = voter
+    for (const staleEntity of staleCandidates) {
+      this.#ecs.removeComponentFromEntity(staleEntity, SYSTEM_SCHEMA_COMPONENTS.salienceCache)
+    }
 
-        for (const candidate of candidates) {
-          const vote = voter.voteSalience(candidate, this.#ecs.readonlyFacade)
+    for (const voter of this.#voters) {
+      const { layer } = voter
 
-          if (vote) {
-            voteData.set(voter.name, [layer, vote])
-          }
+      for (const candidate of candidates) {
+        const vote = voter.voteSalience(candidate, this.#ecs.readonlyFacade)
+
+        if (vote) {
+          const channelMap = entityVoteData.getOrInsert(candidate, new Map())
+          const layerVoteMap = channelMap.getOrInsert(vote.channel, new Map())
+          const voteSet = layerVoteMap.getOrInsert(layer, new Set())
+          voteSet.add(vote)
+
+          this.logger.debug(`Voter ${voter.name} submitted a salience vote for entity ${candidate}`)
+          this.logger.silly`Voter ${voter.name} submitted the following salience vote for entity ${candidate}: ${vote}`
+        } else {
+          this.logger.debug(`Voter ${voter.name} abstained from submitting a vote for entity ${candidate} salience`)
         }
       }
+    }
 
-      // by the end of this function, each entity (candidate) should have its salience cache set
-      // which means that for each vote channel, there is a score, and an overall score
-      //
+    for (const [entity, channelMap] of entityVoteData) {
+      const entityVotesByChannel = new Map<VoteChannel, Set<SalienceVote>>()
+
+      for (const [channel, layerVotesMap] of channelMap) {
+        const coreVotes     = layerVotesMap.get(ENGINE_LAYER.core)
+        const gameVotes     = layerVotesMap.get(ENGINE_LAYER.game)
+        const kitVotes      = layerVotesMap.get(ENGINE_LAYER.kit)
+        const instanceVotes = layerVotesMap.get(ENGINE_LAYER.instance)
+
+        let filteredVotes = (instanceVotes ?? kitVotes ?? gameVotes ?? coreVotes)!
+
+        entityVotesByChannel.set(channel, filteredVotes)
+
+        this.logger.silly`After filtering based on engine layer, the set of salience votes for entity ${entity}, channel ${channel} is ${filteredVotes}`
+      }
+
+      const [total, byChannel] = this.#calculateSalience(entityVotesByChannel, entity)
+
+      this.#ecs.setComponentOnEntity(entity, SYSTEM_SCHEMA_COMPONENTS.salienceCache, { salience: total, channels: byChannel })
     }
   }
 
@@ -117,5 +151,32 @@ export class SalienceSystem extends InitializableSystem {
       this.logger.silly`Voter which was deleted: ${voter}`
     }
 
+  }
+
+  #calculateSalience(voteData: Map<VoteChannel, Set<SalienceVote>>, entity: Entity): [number, Map<VoteChannel, number>] {
+    const salienceByChannel = new Map<VoteChannel, number>()
+
+    for (const [channel, votes] of voteData) {
+      const weightedAvgSalienceFactors = votes.values().reduce((acc, vote) => {
+        const [numerator, denominator] = acc
+        const newNumerator = numerator + (vote.confidence * vote.salience)
+        const newDenominator = denominator + vote.confidence
+
+        return [newNumerator, newDenominator] as [number, number]
+      }, [0, 0] as [number, number])
+
+      const weightedAvgSalience = weightedAvgSalienceFactors[0] / weightedAvgSalienceFactors[1]
+
+      this.logger.silly`For entity ${entity} -> channel ${channel}, the confidence-weighted average of salience scores is ${weightedAvgSalience}`
+
+      salienceByChannel.set(channel, weightedAvgSalience)
+    }
+
+    const numberOfChannels = salienceByChannel.size
+    const averageSalience = salienceByChannel.values().reduce((acc, salience) => acc + salience, 0) / numberOfChannels
+
+    this.logger.debug(`Final salience score for entity ${entity} is ${averageSalience}`)
+
+    return [averageSalience, salienceByChannel]
   }
 }

@@ -57,6 +57,6 @@ export interface SalienceVoter {
 }
 
 export interface SalienceCacheData {
-  salience: SalienceScore
-  channels: Map<VoteChannel, SalienceScore>
+  salience: number
+  channels: Map<VoteChannel, number>
 }

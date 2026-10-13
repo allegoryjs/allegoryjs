@@ -42,10 +42,10 @@ export abstract class ECS {
 
   abstract deregisterSystem(systemName: string): void
 
-  abstract setComponentOnEntity(
+  abstract setComponentOnEntity<Component extends ComponentName>(
     entity: Entity,
-    name: ComponentName,
-    data: ActiveComponentSchema[ComponentName],
+    name: Component,
+    data: ActiveComponentSchema[Component],
   ): void
 
   abstract updateComponentData<Component extends ComponentName>(
