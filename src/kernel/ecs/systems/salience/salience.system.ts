@@ -211,8 +211,6 @@ export class SalienceSystem extends InitializableSystem {
 
       const [weightedNumerator, weightedDenominator] = weightedAvgSalienceFactors
 
-      // A channel whose votes all carry zero confidence contributes no salience signal;
-      // guard against a 0/0 (NaN) result rather than allowing it to poison the aggregate.
       const weightedAvgSalience =
         weightedDenominator === 0 ? 0 : weightedNumerator / weightedDenominator
 
