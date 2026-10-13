@@ -139,10 +139,6 @@ export default class DefaultECS extends ECS {
 
     const revisions: Map<Entity, Map<ComponentName, Revision>> = new Map()
 
-    // Loading is a bulk state mutation. Revision numbers are not serialized, so advance the
-    // global revision once and stamp every loaded component with it. This makes all loaded
-    // entities read as "dirty" to any system that observed an earlier revision, so their
-    // derived caches are rebuilt on the next run.
     this.#revision++
     const loadRevision = this.#revision
 

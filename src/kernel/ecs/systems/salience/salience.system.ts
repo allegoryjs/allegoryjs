@@ -33,8 +33,6 @@ export class SalienceSystem extends InitializableSystem {
 
     this.#ecs.registerComponent(SYSTEM_SCHEMA_COMPONENTS.salienceCache, { serialize: false })
     this.initialized = true
-    // Reset to the sentinel so the first run after (re)initialization always rebuilds;
-    // disposing deregistered the component and cleared all cached salience data.
     this.#lastSeenRevision = -1
 
     await this.onRun()
