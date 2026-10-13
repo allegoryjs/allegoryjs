@@ -33,6 +33,9 @@ export class SalienceSystem extends InitializableSystem {
 
     this.#ecs.registerComponent(SYSTEM_SCHEMA_COMPONENTS.salienceCache, { serialize: false })
     this.initialized = true
+    // Reset to the sentinel so the first run after (re)initialization always rebuilds;
+    // disposing deregistered the component and cleared all cached salience data.
+    this.#lastSeenRevision = -1
 
     await this.onRun()
 
@@ -64,11 +67,8 @@ export class SalienceSystem extends InitializableSystem {
     const entityVoteData = new Map<Entity, Map<VoteChannel, Map<EngineLayer, Set<SalienceVote>>>>()
 
     const oldCandidates = this.#ecs.getEntitiesByComponents(SYSTEM_SCHEMA_COMPONENTS.salienceCache)
-    const preliminaryCandidates = this.#ecs.getEntitiesByComponents(SYSTEM_SCHEMA_COMPONENTS.noun)
-    const staleCandidates = oldCandidates.difference(preliminaryCandidates)
-    const candidates = this.#votersStale
-      ? preliminaryCandidates
-      : this.#ecs.getDirtyEntities(this.#lastSeenRevision).intersection(preliminaryCandidates)
+    const candidates = this.#ecs.getEntitiesByComponents(SYSTEM_SCHEMA_COMPONENTS.noun)
+    const staleCandidates = oldCandidates.difference(candidates)
 
     for (const staleEntity of staleCandidates) {
       this.#ecs.removeComponentFromEntity(staleEntity, SYSTEM_SCHEMA_COMPONENTS.salienceCache)
@@ -119,6 +119,16 @@ export class SalienceSystem extends InitializableSystem {
       this.#ecs.setComponentOnEntity(entity, SYSTEM_SCHEMA_COMPONENTS.salienceCache, {
         salience: total,
         channels: byChannel,
+      })
+    }
+
+    const votedEntities = new Set(entityVoteData.keys())
+    const losers = candidates.difference(votedEntities)
+
+    for (const loser of losers) {
+      this.#ecs.setComponentOnEntity(loser, SYSTEM_SCHEMA_COMPONENTS.salienceCache, {
+        salience: 0,
+        channels: new Map(),
       })
     }
 

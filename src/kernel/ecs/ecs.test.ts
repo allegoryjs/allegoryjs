@@ -1804,6 +1804,30 @@ describe('State Serialization', () => {
     const e3 = ecsB.createEntity()
     expect(e3).toBe(2)
   })
+
+  test('loadSerializedState marks loaded entities as dirty and advances the revision', () => {
+    const ecsA = makeECS()
+    ecsA.registerComponent('position')
+    const e1 = ecsA.createEntity('hero', 'player')
+    ecsA.setComponentOnEntity(e1, 'position', { x: 42, y: 99 })
+
+    const jsonStr = ecsA.exportSerializedState(dummyMeta)
+
+    const ecsB = makeECS()
+    ecsB.registerComponent('position')
+    const revisionBeforeLoad = ecsB.currentRevision
+    ecsB.loadSerializedState(jsonStr, () => true)
+
+    // Loading is a bulk state mutation, so the global revision advances.
+    expect(ecsB.currentRevision).toBe(revisionBeforeLoad + 1)
+
+    // Loaded entities read as dirty relative to the pre-load revision, so derived
+    // caches get rebuilt on the next run.
+    expect(ecsB.getDirtyEntities(revisionBeforeLoad)).toEqual(new Set([e1]))
+    expect(ecsB.getDirtyEntitiesByComponentRevision('position', revisionBeforeLoad)).toEqual(
+      new Set([e1]),
+    )
+  })
 })
 
 // ─── entityHasTag ───────────────────────────────────────────────────

@@ -137,6 +137,15 @@ export default class DefaultECS extends ECS {
       throw new Error('Fatal error loading serialized state: invalid metadata')
     }
 
+    const revisions: Map<Entity, Map<ComponentName, Revision>> = new Map()
+
+    // Loading is a bulk state mutation. Revision numbers are not serialized, so advance the
+    // global revision once and stamp every loaded component with it. This makes all loaded
+    // entities read as "dirty" to any system that observed an earlier revision, so their
+    // derived caches are rebuilt on the next run.
+    this.#revision++
+    const loadRevision = this.#revision
+
     for (const [entityString, entityComponents] of Object.entries(state)) {
       const entityId = Number(entityString)
       const entityComponentsTyped = entityComponents as EngineComponentSchema &
@@ -150,6 +159,9 @@ export default class DefaultECS extends ECS {
       for (const [componentName, componentData] of Object.entries(entityComponentsTyped)) {
         const componentMap = components.getOrInsert(componentName as ComponentName, new Map())
         componentMap.set(entityId, componentData)
+
+        const entityRevisions = revisions.getOrInsert(entityId, new Map())
+        entityRevisions.set(componentName as ComponentName, loadRevision)
       }
     }
 
@@ -157,6 +169,7 @@ export default class DefaultECS extends ECS {
     this.#activeEntities = new Set(activeEntities)
     this.#components = components
     this.#prettyIdMap = prettyIdMap
+    this.#entityRevisions = revisions
 
     this.#logger.info('ECS successfully hydrated with serialized state')
   }

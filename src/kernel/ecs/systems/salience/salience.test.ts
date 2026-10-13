@@ -111,6 +111,29 @@ describe('SalienceSystem - lifecycle', () => {
     await system.init()
     expect(ecs.isComponent('SalienceCache')).toBe(true)
   })
+
+  test('rebuilds salience caches after being re-initialized', async () => {
+    const ecs = makeECS()
+    const system = makeSystem(ecs)
+    const entity = ecs.createEntity('goblin', 'goblin')
+
+    system.registerVoter(
+      fixedVoter(
+        'sight',
+        ENGINE_LAYER.game,
+        vote('visual', SALIENCE_SCORE.focal, SALIENCE_CONFIDENCE.authoritative),
+      ),
+    )
+
+    await system.init()
+    expect(ecs.entityHasComponent(entity, 'SalienceCache')).toBe(true)
+
+    await system.dispose()
+    await system.init()
+
+    expect(ecs.entityHasComponent(entity, 'SalienceCache')).toBe(true)
+    expect(ecs.getEntityComponentData(entity, 'SalienceCache')?.salience).toBe(1)
+  })
 })
 
 // ─── Voter Registration & Deregistration ────────────────────────────
@@ -158,7 +181,9 @@ describe('SalienceSystem - voter registration', () => {
 
     await system.init()
 
-    expect(ecs.entityHasComponent(entity, 'SalienceCache')).toBe(false)
+    const cache = ecs.getEntityComponentData(entity, 'SalienceCache')
+    expect(cache?.salience).toBe(0)
+    expect(cache?.channels.size).toBe(0)
   })
 
   test('deregisterVoter by reference removes the voter', async () => {
@@ -176,7 +201,9 @@ describe('SalienceSystem - voter registration', () => {
 
     await system.init()
 
-    expect(ecs.entityHasComponent(entity, 'SalienceCache')).toBe(false)
+    const cache = ecs.getEntityComponentData(entity, 'SalienceCache')
+    expect(cache?.salience).toBe(0)
+    expect(cache?.channels.size).toBe(0)
   })
 
   test('deregisterVoter does not throw for an unknown voter', () => {
@@ -300,6 +327,29 @@ describe('SalienceSystem - voter staleness rebuilds', () => {
     await system.run()
 
     expect(ecs.getEntityComponentData(entity, 'SalienceCache')?.salience).toBe(0)
+  })
+
+  test('resets an entity to zero salience when its only voter is removed', async () => {
+    const ecs = makeECS()
+    const system = makeSystem(ecs)
+    const entity = ecs.createEntity('goblin', 'goblin')
+
+    system.registerVoter(
+      fixedVoter(
+        'sight',
+        ENGINE_LAYER.game,
+        vote('visual', SALIENCE_SCORE.focal, SALIENCE_CONFIDENCE.authoritative),
+      ),
+    )
+    await system.init()
+    expect(ecs.getEntityComponentData(entity, 'SalienceCache')?.salience).toBe(1)
+
+    system.deregisterVoter('sight')
+    await system.run()
+
+    const cache = ecs.getEntityComponentData(entity, 'SalienceCache')
+    expect(cache?.salience).toBe(0)
+    expect(cache?.channels.size).toBe(0)
   })
 })
 
@@ -429,7 +479,7 @@ describe('SalienceSystem - cache building and scoring', () => {
     expect(Number.isNaN(cache?.salience)).toBe(false)
   })
 
-  test('leaves no cache when every voter abstains', async () => {
+  test('assigns zero salience when every voter abstains', async () => {
     const ecs = makeECS()
     const system = makeSystem(ecs)
     const entity = ecs.createEntity('goblin', 'goblin')
@@ -438,7 +488,21 @@ describe('SalienceSystem - cache building and scoring', () => {
 
     await system.init()
 
-    expect(ecs.entityHasComponent(entity, 'SalienceCache')).toBe(false)
+    const cache = ecs.getEntityComponentData(entity, 'SalienceCache')
+    expect(cache?.salience).toBe(0)
+    expect(cache?.channels.size).toBe(0)
+  })
+
+  test('assigns zero salience when no voters are registered', async () => {
+    const ecs = makeECS()
+    const system = makeSystem(ecs)
+    const entity = ecs.createEntity('goblin', 'goblin')
+
+    await system.init()
+
+    const cache = ecs.getEntityComponentData(entity, 'SalienceCache')
+    expect(cache?.salience).toBe(0)
+    expect(cache?.channels.size).toBe(0)
   })
 })
 
