@@ -79,6 +79,7 @@ export default class DefaultECS extends ECS {
         getAllEntityComponentData: this.getAllEntityComponentData.bind(this),
         getEntityComponentRevision: this.getEntityComponentRevision.bind(this),
         getDirtyEntitiesByComponentRevision: this.getDirtyEntitiesByComponentRevision.bind(this),
+        getDirtyEntities: this.getDirtyEntities.bind(this),
       })
     }
 
@@ -304,7 +305,9 @@ export default class DefaultECS extends ECS {
     }
 
     if (!isPojo(data) && !this.#nonSerializedComponents.has(name)) {
-      this.#logger.errorAndThrow(`Attempted to add non-serializable data (i.e. non-POJO data) for component ${name} which is marked as serializable; for non-POJO data, component must have the "serializable" flag set to false at component registration. Aborting.`)
+      this.#logger.errorAndThrow(
+        `Attempted to add non-serializable data (i.e. non-POJO data) for component ${name} which is marked as serializable; for non-POJO data, component must have the "serializable" flag set to false at component registration. Aborting.`,
+      )
     }
 
     store.set(entity, structuredClone(data))
@@ -344,12 +347,13 @@ export default class DefaultECS extends ECS {
     }
 
     if (!isPojo(data) && !this.#nonSerializedComponents.has(name)) {
-      this.#logger.errorAndThrow(`Attempted to add non-serializable data (i.e. non-POJO data) for component ${name} which is marked as serializable; for non-POJO data, component must have the "serializable" flag set to false at component registration. Aborting.`)
+      this.#logger.errorAndThrow(
+        `Attempted to add non-serializable data (i.e. non-POJO data) for component ${name} which is marked as serializable; for non-POJO data, component must have the "serializable" flag set to false at component registration. Aborting.`,
+      )
     }
 
     this.#logger.debug(`Merging component "${name}" data on entity ${entity}`)
     this.#logger.silly`Merging component "${name}" data on entity ${entity}: ${data}`
-
 
     store.set(entity, {
       ...existingComponentData,
@@ -380,8 +384,7 @@ export default class DefaultECS extends ECS {
     }
 
     store.delete(entity)
-    this.#entityRevisions.get(entity)?.delete(componentType)
-    this.#incrementRevision()
+    this.#incrementRevision(entity, componentType)
     this.#logger.debug(`Removed component "${componentType}" from entity ${entity}`)
   }
 
@@ -520,6 +523,7 @@ export default class DefaultECS extends ECS {
     this.#activeEntities.delete(entity)
     this.#prettyIdMap.delete(prettyId)
     this.#entityRevisions.delete(entity)
+    this.#incrementRevision()
     this.#logger.info(`Entity ${entity} destroyed`)
   }
 
@@ -578,6 +582,21 @@ export default class DefaultECS extends ECS {
 
       if (typeof componentRevision !== 'undefined' && componentRevision > lastRevision) {
         dirty.add(entity)
+      }
+    }
+
+    return dirty
+  }
+
+  getDirtyEntities(lastRevision: Revision) {
+    const dirty = new Set<Entity>()
+
+    for (const [entity, componentRevisions] of this.#entityRevisions.entries()) {
+      for (const revision of componentRevisions.values()) {
+        if (revision > lastRevision) {
+          dirty.add(entity)
+          break
+        }
       }
     }
 

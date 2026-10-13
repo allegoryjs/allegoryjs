@@ -92,6 +92,8 @@ export abstract class ECS {
     component: ComponentName,
     lastRevision: Revision,
   ): Set<Entity>
+
+  abstract getDirtyEntities(lastRevision: Revision): Set<Entity>
 }
 
 export const SYSTEM_SCHEMA_COMPONENTS = {
@@ -193,6 +195,7 @@ export interface EcsReadonlyFacade {
   getActiveEntities(): Set<Entity>
   getEntityComponentRevision(entity: Entity, component: ComponentName): Revision
   getDirtyEntitiesByComponentRevision(component: ComponentName, lastRevision: Revision): Set<Entity>
+  getDirtyEntities(lastRevision: Revision): Set<Entity>
 }
 
 export interface System {

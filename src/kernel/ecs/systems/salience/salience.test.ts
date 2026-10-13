@@ -188,6 +188,121 @@ describe('SalienceSystem - voter registration', () => {
   })
 })
 
+// ─── Voter Staleness Rebuilds ────────────────────────────────────────
+
+describe('SalienceSystem - voter staleness rebuilds', () => {
+  test('rebuilds cache when a voter is registered after init', async () => {
+    const ecs = makeECS()
+    const system = makeSystem(ecs)
+    const entity = ecs.createEntity('goblin', 'goblin')
+
+    system.registerVoter(
+      fixedVoter(
+        'sight',
+        ENGINE_LAYER.game,
+        vote('visual', SALIENCE_SCORE.zero, SALIENCE_CONFIDENCE.authoritative),
+      ),
+    )
+    await system.init()
+    expect(ecs.getEntityComponentData(entity, 'SalienceCache')?.salience).toBe(0)
+
+    system.registerVoter(
+      fixedVoter(
+        'focus',
+        ENGINE_LAYER.instance,
+        vote('visual', SALIENCE_SCORE.focal, SALIENCE_CONFIDENCE.authoritative),
+      ),
+    )
+    await system.run()
+
+    // The instance-layer voter supersedes the game-layer voter, so salience rises to focal.
+    expect(ecs.getEntityComponentData(entity, 'SalienceCache')?.salience).toBe(1)
+  })
+
+  test('rebuilds cache when a voter is deregistered by name after init', async () => {
+    const ecs = makeECS()
+    const system = makeSystem(ecs)
+    const entity = ecs.createEntity('goblin', 'goblin')
+
+    system.registerVoter(
+      fixedVoter(
+        'focus',
+        ENGINE_LAYER.instance,
+        vote('visual', SALIENCE_SCORE.focal, SALIENCE_CONFIDENCE.authoritative),
+      ),
+    )
+    system.registerVoter(
+      fixedVoter(
+        'sight',
+        ENGINE_LAYER.game,
+        vote('visual', SALIENCE_SCORE.zero, SALIENCE_CONFIDENCE.authoritative),
+      ),
+    )
+    await system.init()
+    expect(ecs.getEntityComponentData(entity, 'SalienceCache')?.salience).toBe(1)
+
+    system.deregisterVoter('focus')
+    await system.run()
+
+    // Only the game-layer zero voter remains.
+    expect(ecs.getEntityComponentData(entity, 'SalienceCache')?.salience).toBe(0)
+  })
+
+  test('rebuilds cache when a voter is deregistered by reference after init', async () => {
+    const ecs = makeECS()
+    const system = makeSystem(ecs)
+    const entity = ecs.createEntity('goblin', 'goblin')
+
+    const focus = fixedVoter(
+      'focus',
+      ENGINE_LAYER.instance,
+      vote('visual', SALIENCE_SCORE.focal, SALIENCE_CONFIDENCE.authoritative),
+    )
+    system.registerVoter(focus)
+    system.registerVoter(
+      fixedVoter(
+        'sight',
+        ENGINE_LAYER.game,
+        vote('visual', SALIENCE_SCORE.zero, SALIENCE_CONFIDENCE.authoritative),
+      ),
+    )
+    await system.init()
+    expect(ecs.getEntityComponentData(entity, 'SalienceCache')?.salience).toBe(1)
+
+    system.deregisterVoter(focus)
+    await system.run()
+
+    expect(ecs.getEntityComponentData(entity, 'SalienceCache')?.salience).toBe(0)
+  })
+
+  test('rebuilds cache when a voter is replaced by name after init', async () => {
+    const ecs = makeECS()
+    const system = makeSystem(ecs)
+    const entity = ecs.createEntity('goblin', 'goblin')
+
+    system.registerVoter(
+      fixedVoter(
+        'sight',
+        ENGINE_LAYER.game,
+        vote('visual', SALIENCE_SCORE.focal, SALIENCE_CONFIDENCE.authoritative),
+      ),
+    )
+    await system.init()
+    expect(ecs.getEntityComponentData(entity, 'SalienceCache')?.salience).toBe(1)
+
+    system.registerVoter(
+      fixedVoter(
+        'sight',
+        ENGINE_LAYER.game,
+        vote('visual', SALIENCE_SCORE.zero, SALIENCE_CONFIDENCE.authoritative),
+      ),
+    )
+    await system.run()
+
+    expect(ecs.getEntityComponentData(entity, 'SalienceCache')?.salience).toBe(0)
+  })
+})
+
 // ─── Cache Building & Scoring ───────────────────────────────────────
 
 describe('SalienceSystem - cache building and scoring', () => {

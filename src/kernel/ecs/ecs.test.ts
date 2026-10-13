@@ -1061,6 +1061,14 @@ describe('currentRevision', () => {
     expect(ecs.currentRevision).toBe(revBefore + 1)
   })
 
+  test('increments when destroying an entity', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+    const revBefore = ecs.currentRevision
+    ecs.destroyEntity(e)
+    expect(ecs.currentRevision).toBe(revBefore + 1)
+  })
+
   test('monotonically increases across multiple operations', () => {
     const ecs = makeECS()
     ecs.registerComponent('position')
@@ -1311,17 +1319,17 @@ describe('getDirtyEntitiesByComponentRevision', () => {
     expect(velocityDirty).toEqual(new Set([e]))
   })
 
-  test('no longer returns entity as dirty after component is removed', () => {
+  test('reports entity as dirty for a component after it is removed', () => {
     const ecs = makeECS()
     ecs.registerComponent('position')
     const e = ecs.createEntity()
     ecs.setComponentOnEntity(e, 'position', { x: 10, y: 20 })
 
-    expect(ecs.getDirtyEntitiesByComponentRevision('position', 0)).toEqual(new Set([e]))
+    const checkpoint = ecs.currentRevision
 
     ecs.removeComponentFromEntity(e, 'position')
 
-    expect(ecs.getDirtyEntitiesByComponentRevision('position', 0).size).toBe(0)
+    expect(ecs.getDirtyEntitiesByComponentRevision('position', checkpoint)).toEqual(new Set([e]))
   })
 
   test('works with built-in components (Meta, Tags, Noun)', () => {
@@ -1351,6 +1359,105 @@ describe('getDirtyEntitiesByComponentRevision', () => {
 
     const dirty = ecs.getDirtyEntitiesByComponentRevision('position', 0)
     expect(dirty.size).toBe(0)
+  })
+})
+
+// ─── getDirtyEntities ───────────────────────────────────────────────
+
+describe('getDirtyEntities', () => {
+  test('returns empty set when no entities have revisions', () => {
+    const ecs = makeECS()
+    expect(ecs.getDirtyEntities(0).size).toBe(0)
+  })
+
+  test('returns all created entities when lastRevision is 0', () => {
+    const ecs = makeECS()
+    const e1 = ecs.createEntity()
+    const e2 = ecs.createEntity()
+    expect(ecs.getDirtyEntities(0)).toEqual(new Set([e1, e2]))
+  })
+
+  test('returns empty set when lastRevision equals currentRevision', () => {
+    const ecs = makeECS()
+    ecs.createEntity()
+    expect(ecs.getDirtyEntities(ecs.currentRevision).size).toBe(0)
+  })
+
+  test('returns empty set when lastRevision is greater than currentRevision', () => {
+    const ecs = makeECS()
+    ecs.createEntity()
+    expect(ecs.getDirtyEntities(ecs.currentRevision + 10).size).toBe(0)
+  })
+
+  test('detects setComponentOnEntity as dirty', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+
+    const checkpoint = ecs.currentRevision
+    ecs.setComponentOnEntity(e, 'position', { x: 1, y: 2 })
+
+    expect(ecs.getDirtyEntities(checkpoint)).toEqual(new Set([e]))
+  })
+
+  test('detects updateComponentData as dirty', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 1, y: 2 })
+
+    const checkpoint = ecs.currentRevision
+    ecs.updateComponentData(e, 'position', { x: 5 })
+
+    expect(ecs.getDirtyEntities(checkpoint)).toEqual(new Set([e]))
+  })
+
+  test('detects component removal as dirty', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 1, y: 2 })
+
+    const checkpoint = ecs.currentRevision
+    ecs.removeComponentFromEntity(e, 'position')
+
+    expect(ecs.getDirtyEntities(checkpoint)).toEqual(new Set([e]))
+  })
+
+  test('reports an entity dirty when any of its components changed', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    ecs.registerComponent('health')
+    const e = ecs.createEntity()
+    ecs.setComponentOnEntity(e, 'position', { x: 1, y: 2 })
+
+    const checkpoint = ecs.currentRevision
+    ecs.setComponentOnEntity(e, 'health', { current: 10, max: 10 })
+
+    expect(ecs.getDirtyEntities(checkpoint)).toEqual(new Set([e]))
+  })
+
+  test('only returns entities modified after the checkpoint', () => {
+    const ecs = makeECS()
+    ecs.registerComponent('position')
+    const e1 = ecs.createEntity()
+    ecs.setComponentOnEntity(e1, 'position', { x: 1, y: 1 })
+
+    const checkpoint = ecs.currentRevision
+
+    const e2 = ecs.createEntity()
+    ecs.setComponentOnEntity(e2, 'position', { x: 2, y: 2 })
+
+    expect(ecs.getDirtyEntities(checkpoint)).toEqual(new Set([e2]))
+    expect(ecs.getDirtyEntities(0)).toEqual(new Set([e1, e2]))
+  })
+
+  test('does not return destroyed entities', () => {
+    const ecs = makeECS()
+    const e = ecs.createEntity()
+    ecs.destroyEntity(e)
+
+    expect(ecs.getDirtyEntities(0).size).toBe(0)
   })
 })
 

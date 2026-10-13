@@ -148,8 +148,8 @@ export class SemanticCacheSystem extends InitializableSystem {
     }
 
     this.#ecs.registerComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache, { serialize: false })
-    await this.onRun()
     this.initialized = true
+    await this.onRun()
     this.logger.info('Semantic Cache System initialized')
   }
 

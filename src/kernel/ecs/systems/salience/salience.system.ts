@@ -16,6 +16,7 @@ export class SalienceSystem extends InitializableSystem {
   #ecs: ECS
   #lastSeenRevision: Revision = -1
   #voters: Set<SalienceVoter> = new Set()
+  #votersStale = false
 
   protected logger: Logger
 
@@ -53,9 +54,9 @@ export class SalienceSystem extends InitializableSystem {
       this.logger.errorAndThrow(`Cannot run ${this.name} system; system not initialized`)
     }
 
-    if (this.#lastSeenRevision === this.#ecs.currentRevision) {
+    if (!this.#votersStale && this.#lastSeenRevision === this.#ecs.currentRevision) {
       this.logger.debug(
-        `In ${this.name}, the last seen ECS revision is the current one; skipping salience cache rebuild`,
+        `In ${this.name}, the last seen ECS revision is the current one, and no voters have been added or removed; skipping salience cache rebuild`,
       )
       return
     }
@@ -63,8 +64,11 @@ export class SalienceSystem extends InitializableSystem {
     const entityVoteData = new Map<Entity, Map<VoteChannel, Map<EngineLayer, Set<SalienceVote>>>>()
 
     const oldCandidates = this.#ecs.getEntitiesByComponents(SYSTEM_SCHEMA_COMPONENTS.salienceCache)
-    const candidates = this.#ecs.getEntitiesByComponents(SYSTEM_SCHEMA_COMPONENTS.noun)
-    const staleCandidates = oldCandidates.difference(candidates)
+    const preliminaryCandidates = this.#ecs.getEntitiesByComponents(SYSTEM_SCHEMA_COMPONENTS.noun)
+    const staleCandidates = oldCandidates.difference(preliminaryCandidates)
+    const candidates = this.#votersStale
+      ? preliminaryCandidates
+      : this.#ecs.getDirtyEntities(this.#lastSeenRevision).intersection(preliminaryCandidates)
 
     for (const staleEntity of staleCandidates) {
       this.#ecs.removeComponentFromEntity(staleEntity, SYSTEM_SCHEMA_COMPONENTS.salienceCache)
@@ -119,6 +123,7 @@ export class SalienceSystem extends InitializableSystem {
     }
 
     this.#lastSeenRevision = this.#ecs.currentRevision
+    this.#votersStale = false
   }
 
   registerVoter(voter: SalienceVoter) {
@@ -138,6 +143,7 @@ export class SalienceSystem extends InitializableSystem {
     }
 
     this.#voters.add(voter)
+    this.#votersStale = true
     this.logger.debug(`Registered new voter ${voter.name}`)
   }
 
@@ -155,6 +161,7 @@ export class SalienceSystem extends InitializableSystem {
       }
 
       this.#voters.delete(registered)
+      this.#votersStale = true
       this.logger.info(`Deregistered voter with name ${voter}`)
     } else {
       const matchVoterName = (registeredVoter: SalienceVoter) => registeredVoter.name === voter.name
@@ -170,6 +177,7 @@ export class SalienceSystem extends InitializableSystem {
       }
 
       this.#voters.delete(registered)
+      this.#votersStale = true
       this.logger.info(`Deregistered voter with name ${voter.name}`)
       this.logger.silly`Voter which was deleted: ${voter}`
     }
