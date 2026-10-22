@@ -11,12 +11,12 @@ export const ENTITY_GROUP_AUX = 'AUXILIARY'
 // the user entered text that doesn't map cleanly onto a known Intent
 export const ACTION_NAME_UNKNOWN = 'UNKNOWN'
 
-export interface IntentClassifierParams<ComponentSchema extends EngineComponentSchema> {
+export interface IntentClassifierParams {
   config: IntentClassifierConfig
   eventBus: EventBus
-  ecs: ECS<ComponentSchema>
+  ecs: ECS
 
-  semanticResolutionSystem?: SemanticResolutionSystem<ComponentSchema>
+  semanticResolutionSystem?: SemanticResolutionSystem
   logger?: Logger
 }
 

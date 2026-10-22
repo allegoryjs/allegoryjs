@@ -4,7 +4,8 @@ import type { ActiveComponentSchema, ComponentName } from '@/kernel/ecs/ecs.type
 
 export type ComponentResolver<Component extends ComponentName = ComponentName> = (
   componentData: ActiveComponentSchema[Component],
-) => string
+  noun: string,
+) => string[]
 
 export interface ComponentResolverMap extends Omit<Map<ComponentName, any>, 'get' | 'set'> {
   get<Component extends ComponentName>(key: Component): ComponentResolver<Component> | undefined
@@ -13,19 +14,12 @@ export interface ComponentResolverMap extends Omit<Map<ComponentName, any>, 'get
 
 export interface SemanticCacheConfig {
   ecs: ECS
+  logger: Logger
   vectorize: (text: string) => Float32Array
-
-  logger?: Logger
-  customDescriptorAggregator?: (descriptors: Map<ComponentName, string>) => DescriptorCacheEntry
 }
 
-export interface DescriptorCacheEntry {
-  combined: string
-  chunked: string[]
-}
+export type DescriptorCacheChunks = string[];
 
 export interface SemanticCacheData {
-  fullDescriptor?: string
-  fullVector?: Float32Array
-  chunks?: [descriptor: string, vector: Float32Array][]
+  chunks?: Array<[descriptor: string, vector: Float32Array]>
 }

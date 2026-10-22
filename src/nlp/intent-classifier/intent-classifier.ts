@@ -6,11 +6,7 @@ import type {
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
-import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
-import {
-  createSemanticResolutionSystem,
-  type SemanticResolutionSystem,
-} from '@/kernel/ecs/systems/semantic-cache/semantic-cache.system'
+import { SYSTEM_SCHEMA_COMPONENTS, type Entity } from '@/kernel/ecs/ecs.types'
 import type { Intent } from '@/kernel/intent-pipeline/intent-pipeline.types'
 import {
   ENTITY_GROUP_AUX,
@@ -22,6 +18,7 @@ import {
 } from '@/nlp/intent-classifier/intent-classifier.types'
 import type { IntentClassifierParams } from '@/nlp/intent-classifier/intent-classifier.types'
 import { splitRawCommands } from '@/nlp/language-profile/en-us/profile-en-us'
+import type { SemanticCacheData } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.types'
 
 const DEFAULT_CONFIDENCE_THRESHOLD = 0.8
 const thresholdIsValid = (threshold: number | undefined) =>
@@ -33,22 +30,20 @@ const thresholdIsValid = (threshold: number | undefined) =>
  * Responsible for coordinating the transformation of a raw player input into
  * a list of actionable Intents that the engine knows how to handle
  */
-export class IntentClassifier<ComponentSchema extends EngineComponentSchema> {
+export class IntentClassifier {
   #logger: Logger
   #initialized = false
   #config: IntentClassifierConfig
   #actionPipeline?: TextClassificationPipeline
   #nerPipeline?: TokenClassificationPipeline
-  #semanticResolutionSystem?: SemanticResolutionSystem<ComponentSchema>
-  #ecs?: ECS<ComponentSchema>
+  #ecs: ECS
+  #phraseEmbeddingsCache: Map<string, Float32Array> = new Map()
 
   constructor({
     config,
     logger,
-    semanticResolutionSystem,
     ecs,
-    eventBus,
-  }: IntentClassifierParams<ComponentSchema>) {
+  }: IntentClassifierParams) {
     this.#logger = logger ?? new DefaultLogger()
 
     const thresholdProperties = [
@@ -71,10 +66,6 @@ export class IntentClassifier<ComponentSchema extends EngineComponentSchema> {
     }
 
     this.#ecs = ecs
-
-    this.#semanticResolutionSystem =
-      semanticResolutionSystem ??
-      createSemanticResolutionSystem(ecs.readonlyFacade, eventBus, logger)
   }
 
   async initialize() {
@@ -98,17 +89,40 @@ export class IntentClassifier<ComponentSchema extends EngineComponentSchema> {
     this.#assertReady()
 
     // eztodo splitRawCommands should be injected so different languages are usable; don't assume en-US
-    const classifiedCommands = splitRawCommands(command).map(async (splitCommand) => {
-      // eztodo error handling
-      const { targets, auxiliaries } = await this.#classifyNer(splitCommand.raw)
+    const classifiedCommandsResults = await Promise.allSettled(
+      splitRawCommands(command).map(async (splitCommand) => {
+        // eztodo error handling
+        const { targets, auxiliaries } = await this.#classifyNer(splitCommand.raw)
 
-      return {
-        dryRun: splitCommand.dryRun,
-        action: await this.#classifyAction(splitCommand.raw),
-        targets,
-        auxiliaries,
+        return {
+          dryRun: splitCommand.dryRun,
+          action: await this.#classifyAction(splitCommand.raw),
+          targets,
+          auxiliaries,
+        }
+      })
+    )
+
+    if (classifiedCommandsResults.some(({ status }) => status === 'rejected')) {
+      const rejectedReasons = classifiedCommandsResults.reduce((acc, result, index) => {
+        if (result.status === 'fulfilled') {
+          return acc
+        }
+
+        return acc + `Command of index ${index} failed with reason: ${result.reason}\n`
+      }, '')
+
+      this.#logger.errorAndThrow(`Error performing NER classification on command(s):\n${rejectedReasons}`)
+    }
+
+    const classifiedCommands = classifiedCommandsResults.flatMap((result) => {
+      if (result.status === 'rejected') {
+        return []
       }
+
+      return [result.value]
     })
+
 
     // eztodo remove comment
     // now i have a list of commands which have actual engine action names, and plain-text, unresolved entity descriptors
@@ -122,6 +136,39 @@ export class IntentClassifier<ComponentSchema extends EngineComponentSchema> {
     //             - what to do if some entities tie in cosine similarity score?
     //     4. save the entity IDs in the returned Intent object as the target(s) and aux(s)
     //     5. return intents
+
+    const salientEntities = this.#ecs.getEntitiesByComponents(SYSTEM_SCHEMA_COMPONENTS.salienceCache)
+    const semanticDescriptors = new Map<Entity, SemanticCacheData>()
+
+    for (const entity of salientEntities) {
+      const salienceCache = this.#ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.salienceCache)!
+
+      if (salienceCache.salience === 0) {
+        salientEntities.delete(entity)
+        continue
+      }
+
+      const semanticDescriptor = this.#ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
+
+      if (!semanticDescriptor) {
+        this.#logger.errorAndThrow(`Failed to resolve semantic descriptor for entity ${entity}; if you did not modify the default system components, this is likely an internal engine bug.`)
+      }
+
+      semanticDescriptors.set(entity, semanticDescriptor)
+    }
+
+    for (const classifiedCommand of classifiedCommands) {
+      const resolvedTargets: Entity[] = []
+      const resolvedAux: Entity[] = []
+
+      for (const target of classifiedCommand.targets) {
+        const embedding = this.#phraseEmbeddingsCache.getOrInsertComputed(target.word, () => this.#vectorize(target.word))
+      }
+
+      for (const aux of classifiedCommand.auxiliaries) {
+
+      }
+    }
   }
 
   #assertReady() {
@@ -169,6 +216,11 @@ export class IntentClassifier<ComponentSchema extends EngineComponentSchema> {
       targets,
       auxiliaries,
     }
+  }
+
+  #vectorize(word: string) {
+    // eztodo
+    return new Float32Array()
   }
 
   async #matchEntities(subject: string): Promise<Set<Entity>> {

@@ -1,4 +1,3 @@
-import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
 import {
@@ -6,27 +5,14 @@ import {
   type Entity,
   InitializableSystem,
   type ComponentName,
-  type ActiveComponentSchema,
   type Revision,
 } from '@/kernel/ecs/ecs.types'
 import type {
+  ComponentResolver,
   ComponentResolverMap,
-  DescriptorCacheEntry,
   SemanticCacheConfig,
   SemanticCacheData,
 } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.types'
-
-const DESCRIPTOR_DELIMITER = ';;'
-
-function aggregateDescriptors(descriptors: Map<ComponentName, string>): DescriptorCacheEntry {
-  return {
-    combined: Array.from(descriptors).reduce(
-      (acc, [_, descriptor]) => `${acc} ${DESCRIPTOR_DELIMITER} ${descriptor}`,
-      '',
-    ),
-    chunked: Array.from(descriptors.values()),
-  }
-}
 
 /**
  * The semantic resolution system connects entities in the ECS to the NLP pipeline.
@@ -42,28 +28,33 @@ function aggregateDescriptors(descriptors: Map<ComponentName, string>): Descript
  * For example, imagine a component called DamageComponent, which has data shaped like `{ health: 80, statusEffects: ['poisoned', 'blessed']}`
  * The resolver for that component might look like:
  * ```
- * (componentState: DamageComponentState) => {
- *   let healthLevel
- *   if (componentState.health < 30) {
- *       healthLevel = 'low health'
+ * (state: DamageComponentState, noun: string): string[] => {
+ *   const phrases: string[] = []
+ *
+ *   if (state.health < 30) {
+ *     phrases.push(`dying ${noun}`, `weak ${noun}`)
+ *   } else if (state.health < 70) {
+ *     phrases.push(`injured ${noun}`)
  *   } else {
- *       healthLevel = 'healthy'
+ *     phrases.push(`uninjured ${noun}`, `healthy ${noun}`)
  *   }
  *
- *   const statusEffectText = componentState.statusEffects.length ? componentState.statusEffects.join(', ') : 'none'
+ *   for (const effect of state.statusEffects) {
+ *     phrases.push(`${effect} ${noun}`)
+ *   }
  *
- *   return `Health level: ${health level}, status effects: ${statusEffectText}`
+ *   return phrases
  * }
  *
- * // outputs 'Health level: healthy, status effects: poisoned, blessed'
+ * // outputs ['uninjured goblin', 'healthy goblin', 'poisoned goblin', 'blessed goblin']
  * ```
+ *
+ * In order to preserve the accuracy of the cosine similarity, do not include specific telemetry like "goblin with 30 health" because that is semantically
+ * very similar to "goblin with 100 health" and wouldn't be reliably matched with the correct entity.
  *
  * Note that the Noun component is crucial for the entity association step. Descriptors are chunked by component
  * to avoid embedding dilution, and to ensure that descriptors from the Semantic Cache are associated with the
- * correct entity, the Noun.noun value will be prefixed on the descriptors from this cache.
- * e.g. looking at the above example of DamageComponent, if it is attached to an entity representing a goblin,
- * you might attach a Noun to the goblin, "goblin"; the vectors cached by this system will include it like
- * "goblin: health level: 33, status effects: poisoned, blessed" per chunk.
+ * correct entity, the Noun.noun will be passed to the resolver, and should *always* be prefixed on the descriptors from this cache.
  */
 export class SemanticCacheSystem extends InitializableSystem {
   readonly name = 'SemanticCache'
@@ -73,18 +64,16 @@ export class SemanticCacheSystem extends InitializableSystem {
   #resolvers: ComponentResolverMap
   #staleResolvers: Set<ComponentName>
   #vectorize: (text: string) => Float32Array
-  #descriptorAggregator: (descriptors: Map<ComponentName, string>) => DescriptorCacheEntry
 
   protected logger: Logger
 
-  constructor({ ecs, vectorize, logger, customDescriptorAggregator }: SemanticCacheConfig) {
+  constructor({ ecs, vectorize, logger }: SemanticCacheConfig) {
     super()
     this.#ecs = ecs
     this.#vectorize = vectorize
 
-    this.logger = logger ?? new DefaultLogger()
+    this.logger = logger
     this.#resolvers = new Map() as ComponentResolverMap
-    this.#descriptorAggregator = customDescriptorAggregator ?? aggregateDescriptors
 
     this.#lastSeenRevision = this.#ecs.currentRevision
     this.#staleResolvers = new Set(this.#resolvers.keys())
@@ -166,7 +155,7 @@ export class SemanticCacheSystem extends InitializableSystem {
 
   registerResolver<Component extends ComponentName>(
     componentName: Component,
-    resolver: (componentData: ActiveComponentSchema[Component]) => string,
+    resolver: ComponentResolver<Component>
   ) {
     if (this.#resolvers.has(componentName)) {
       this.logger.info(`Replacing existing resolver for component ${componentName}`)
@@ -200,9 +189,9 @@ export class SemanticCacheSystem extends InitializableSystem {
       this.logger.errorAndThrow(err)
     }
 
-    const entityHasNoun =
-      this.#ecs.entityHasComponent(entity, SYSTEM_SCHEMA_COMPONENTS.noun) &&
-      !!this.#ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.noun)?.noun
+    const entityNoun = this.#ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.noun)?.noun
+
+    const entityHasNoun = !!entityNoun
 
     if (!entityHasNoun) {
       this.logger.info(
@@ -218,7 +207,7 @@ export class SemanticCacheSystem extends InitializableSystem {
       return
     }
 
-    const componentDescriptors: Map<ComponentName, string> = new Map()
+    const componentDescriptors: Map<ComponentName, string[]> = new Map()
 
     const componentData = this.#ecs.getAllEntityComponentData(entity)
 
@@ -226,7 +215,7 @@ export class SemanticCacheSystem extends InitializableSystem {
       const resolver = this.#resolvers.get(componentName as ComponentName)
 
       if (resolver) {
-        componentDescriptors.set(componentName as ComponentName, resolver(data))
+        componentDescriptors.set(componentName as ComponentName, resolver(data, entityNoun))
       }
     }
 
@@ -245,16 +234,11 @@ export class SemanticCacheSystem extends InitializableSystem {
       return
     }
 
-    const aggregated = this.#descriptorAggregator(componentDescriptors)
-    const chunks = aggregated.chunked.map(
-      (descriptor) => [descriptor, this.#vectorize(descriptor)] as [string, Float32Array],
+    const chunks = Array.from(componentDescriptors.values()).flatMap(descriptors =>
+      descriptors.map(descriptor => [descriptor, this.#vectorize(descriptor)] as [string, Float32Array])
     )
 
-    const cacheEntry: SemanticCacheData = {
-      fullDescriptor: aggregated.combined,
-      fullVector: this.#vectorize(aggregated.combined),
-      chunks,
-    }
+    const cacheEntry: SemanticCacheData = { chunks }
 
     this.#ecs.setComponentOnEntity(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, cacheEntry)
 
