@@ -189,11 +189,11 @@ export class SemanticCacheSystem extends InitializableSystem {
       this.logger.errorAndThrow(err)
     }
 
-    const entityNoun = this.#ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.noun)?.noun
+    const entityNoun = this.#ecs.entityHasComponent(entity, SYSTEM_SCHEMA_COMPONENTS.noun)
+      ? this.#ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.noun)?.noun
+      : undefined
 
-    const entityHasNoun = !!entityNoun
-
-    if (!entityHasNoun) {
+    if (!entityNoun) {
       this.logger.info(
         `
         Semantic Cache build triggered in Semantic Cache system for entity ${entity}, but entity does not have the Noun component.
