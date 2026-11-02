@@ -1025,13 +1025,6 @@ describe('currentRevision', () => {
     expect(ecs.getEntityComponentRevision(e, 'Meta')).toBe(2)
   })
 
-  test('increments additional revision when entity is created with a noun', () => {
-    const ecs = makeECS()
-    const e = ecs.createEntity('hero', 'warrior')
-    expect(ecs.currentRevision).toBe(3)
-    expect(ecs.getEntityComponentRevision(e, 'Noun')).toBe(3)
-  })
-
   test('increments when setting a component on an entity', () => {
     const ecs = makeECS()
     ecs.registerComponent('position')
@@ -1332,19 +1325,12 @@ describe('getDirtyEntitiesByComponentRevision', () => {
     expect(ecs.getDirtyEntitiesByComponentRevision('position', checkpoint)).toEqual(new Set([e]))
   })
 
-  test('works with built-in components (Meta, Tags, Noun)', () => {
+  test('works with built-in components (Meta, Tags)', () => {
     const ecs = makeECS()
-    const e1 = ecs.createEntity('hero', 'warrior')
 
     const checkpoint = ecs.currentRevision
 
-    const e2 = ecs.createEntity('monster', 'dragon')
-
-    const dirtyNoun = ecs.getDirtyEntitiesByComponentRevision('Noun', checkpoint)
-    expect(dirtyNoun).toEqual(new Set([e2]))
-
-    const allDirtyNoun = ecs.getDirtyEntitiesByComponentRevision('Noun', 0)
-    expect(allDirtyNoun).toEqual(new Set([e1, e2]))
+    const e2 = ecs.createEntity('monster')
 
     const dirtyMeta = ecs.getDirtyEntitiesByComponentRevision('Meta', checkpoint)
     expect(dirtyMeta).toEqual(new Set([e2]))
@@ -1505,8 +1491,17 @@ describe('Systems', () => {
   })
 
   test('systems use default priority when none is provided', () => {
+    const logger = new DefaultLogger({
+      channelOpts: {
+        info: false,
+        debug: false,
+        error: false,
+        warn: false,
+        silly: false,
+      },
+    })
     // Default priority set to 25
-    const ecs = new ECS(undefined, { defaultSystemPriority: 25 })
+    const ecs = new ECS(logger, { defaultSystemPriority: 25 })
     const s1 = {
       name: 's1',
       priority: 50,
@@ -1704,7 +1699,7 @@ describe('State Serialization', () => {
     const ecs = makeECS()
     ecs.registerComponent('position')
 
-    const e1 = ecs.createEntity('hero', 'player')
+    const e1 = ecs.createEntity('hero')
     ecs.setComponentOnEntity(e1, 'position', { x: 10, y: 20 })
 
     const jsonStr = ecs.exportSerializedState(dummyMeta)
@@ -1722,7 +1717,6 @@ describe('State Serialization', () => {
     // Should contain the components for e1
     expect(parsed.state[e1].position).toEqual({ x: 10, y: 20 })
     expect(parsed.state[e1].Meta.id).toBe('hero')
-    expect(parsed.state[e1].Noun.noun).toBe('player')
   })
 
   test('exportSerializedState does not include destroyed entities', () => {
@@ -1770,7 +1764,7 @@ describe('State Serialization', () => {
     // 1. Create and populate an ECS
     const ecsA = makeECS()
     ecsA.registerComponent('position')
-    const e1 = ecsA.createEntity('hero', 'player')
+    const e1 = ecsA.createEntity('hero')
     ecsA.setComponentOnEntity(e1, 'position', { x: 42, y: 99 })
 
     const jsonStr = ecsA.exportSerializedState(dummyMeta)
@@ -1785,7 +1779,6 @@ describe('State Serialization', () => {
     expect(ecsB.entityExists(e1)).toBe(true)
     expect(ecsB.getEntityByPrettyId('hero')).toBe(e1)
     expect(ecsB.getEntityComponentData(e1, 'position')).toEqual({ x: 42, y: 99 })
-    expect(ecsB.getEntityComponentData(e1, 'Noun')?.noun).toBe('player')
   })
 
   test('loadSerializedState restores the nextEntityId correctly', () => {
@@ -1808,7 +1801,7 @@ describe('State Serialization', () => {
   test('loadSerializedState marks loaded entities as dirty and advances the revision', () => {
     const ecsA = makeECS()
     ecsA.registerComponent('position')
-    const e1 = ecsA.createEntity('hero', 'player')
+    const e1 = ecsA.createEntity('hero')
     ecsA.setComponentOnEntity(e1, 'position', { x: 42, y: 99 })
 
     const jsonStr = ecsA.exportSerializedState(dummyMeta)
@@ -2146,7 +2139,7 @@ describe('parseStateJson', () => {
   test('successfully parses state produced by exportSerializedState', () => {
     const ecs = makeECS()
     ecs.registerComponent('position')
-    const e = ecs.createEntity('hero', 'player')
+    const e = ecs.createEntity('hero')
     ecs.setComponentOnEntity(e, 'position', { x: 50, y: 75 })
 
     const serialized = ecs.exportSerializedState(validMetadata)
@@ -2155,6 +2148,5 @@ describe('parseStateJson', () => {
     expect(envelope.metadata).toEqual(validMetadata)
     expect(envelope.state[e]?.position).toEqual({ x: 50, y: 75 })
     expect(envelope.state[e]?.Meta?.id).toBe('hero')
-    expect(envelope.state[e]?.Noun?.noun).toBe('player')
   })
 })

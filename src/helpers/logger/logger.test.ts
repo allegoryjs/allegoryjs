@@ -22,7 +22,7 @@ describe('DefaultLogger', () => {
     console.debug = mockDebug as any
     console.dir = mockDir as any
 
-    const logger = new DefaultLogger({ silly: false })
+    const logger = new DefaultLogger({ channelOpts: { silly: false }})
     logger.silly`Test message ${{ x: 1 }}`
     logger.silly('Plain message', { x: 1 })
 
@@ -40,7 +40,7 @@ describe('DefaultLogger', () => {
       dirCalls.push(args)
     }) as any
 
-    const logger = new DefaultLogger({ silly: true })
+    const logger = new DefaultLogger({ channelOpts: { silly: true }})
     const data = { count: 42 }
     logger.silly`Entity 1 updated: ${data}`
 
@@ -64,7 +64,7 @@ describe('DefaultLogger', () => {
     ;(globalThis as any).document = (globalThis as any).window.document
 
     try {
-      const logger = new DefaultLogger({ silly: true })
+      const logger = new DefaultLogger({ channelOpts: { silly: true }})
       const data = { count: 99 }
       logger.silly`Entity 2 updated: ${data}`
 

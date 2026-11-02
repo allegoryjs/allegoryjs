@@ -10,7 +10,6 @@ export type {
   EngineComponentSchema,
   Entity,
   InitializableSystem,
-  MandatoryComponent,
   System,
 } from '@/kernel/ecs/ecs.types'
 export { default as ECS } from '@/kernel/ecs/ecs'

@@ -1,6 +1,6 @@
 import { ENGINE_LAYER, type EngineLayer } from '@/engine/engine.types'
 import type { Logger } from '@/helpers/logger/logger.types'
-import { InitializableSystem, SYSTEM_SCHEMA_COMPONENTS } from '@/kernel/ecs/ecs.types'
+import { InitializableSystem } from '@/kernel/ecs/ecs.types'
 import type { ECS, Entity, Revision } from '@/kernel/ecs/ecs.types'
 
 import type {
@@ -8,7 +8,8 @@ import type {
   SalienceVote,
   SalienceVoter,
   VoteChannel,
-} from './salience.types'
+} from '@/world-kits/zork-like/ecs/systems/salience/salience.types'
+import { ZLIKE_SYSTEM_COMPONENTS } from '@/world-kits/zork-like/ecs/zlike-ecs.types'
 
 export class SalienceSystem extends InitializableSystem {
   readonly name = 'SalienceSystem'
@@ -31,7 +32,7 @@ export class SalienceSystem extends InitializableSystem {
       this.logger.errorAndThrow(`Cannot initialize ${this.name} system; system already initialized`)
     }
 
-    this.#ecs.registerComponent(SYSTEM_SCHEMA_COMPONENTS.salienceCache, { serialize: false })
+    this.#ecs.registerComponent(ZLIKE_SYSTEM_COMPONENTS.salienceCache, { serialize: false })
     this.initialized = true
     this.#lastSeenRevision = -1
 
@@ -45,7 +46,7 @@ export class SalienceSystem extends InitializableSystem {
       this.logger.errorAndThrow(`Cannot dispose of ${this.name} system; system not initialized`)
     }
 
-    this.#ecs.deregisterComponent(SYSTEM_SCHEMA_COMPONENTS.salienceCache)
+    this.#ecs.deregisterComponent(ZLIKE_SYSTEM_COMPONENTS.salienceCache)
     this.initialized = false
     this.logger.info('Salience System disposed; cache component removed from all entities')
   }
@@ -64,12 +65,12 @@ export class SalienceSystem extends InitializableSystem {
 
     const entityVoteData = new Map<Entity, Map<VoteChannel, Map<EngineLayer, Set<SalienceVote>>>>()
 
-    const oldCandidates = this.#ecs.getEntitiesByComponents(SYSTEM_SCHEMA_COMPONENTS.salienceCache)
-    const candidates = this.#ecs.getEntitiesByComponents(SYSTEM_SCHEMA_COMPONENTS.noun)
+    const oldCandidates = this.#ecs.getEntitiesByComponents(ZLIKE_SYSTEM_COMPONENTS.salienceCache)
+    const candidates = this.#ecs.getEntitiesByComponents(ZLIKE_SYSTEM_COMPONENTS.noun)
     const staleCandidates = oldCandidates.difference(candidates)
 
     for (const staleEntity of staleCandidates) {
-      this.#ecs.removeComponentFromEntity(staleEntity, SYSTEM_SCHEMA_COMPONENTS.salienceCache)
+      this.#ecs.removeComponentFromEntity(staleEntity, ZLIKE_SYSTEM_COMPONENTS.salienceCache)
     }
 
     for (const voter of this.#voters) {
@@ -114,7 +115,7 @@ export class SalienceSystem extends InitializableSystem {
 
       const [total, byChannel] = this.#calculateSalience(entityVotesByChannel, entity)
 
-      this.#ecs.setComponentOnEntity(entity, SYSTEM_SCHEMA_COMPONENTS.salienceCache, {
+      this.#ecs.setComponentOnEntity(entity, ZLIKE_SYSTEM_COMPONENTS.salienceCache, {
         salience: total,
         channels: byChannel,
       })
@@ -124,7 +125,7 @@ export class SalienceSystem extends InitializableSystem {
     const losers = candidates.difference(votedEntities)
 
     for (const loser of losers) {
-      this.#ecs.setComponentOnEntity(loser, SYSTEM_SCHEMA_COMPONENTS.salienceCache, {
+      this.#ecs.setComponentOnEntity(loser, ZLIKE_SYSTEM_COMPONENTS.salienceCache, {
         salience: 0,
         channels: new Map(),
       })

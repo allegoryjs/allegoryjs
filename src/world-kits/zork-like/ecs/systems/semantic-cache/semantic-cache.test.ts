@@ -1,9 +1,9 @@
 import { describe, expect, mock, test } from 'bun:test'
 
 import { DefaultLogger } from '@/helpers/logger/logger'
-import ECS from '@/kernel/ecs/ecs'
-import { SYSTEM_SCHEMA_COMPONENTS } from '@/kernel/ecs/ecs.types'
-import { SemanticCacheSystem } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.system'
+import ECS from '@/world-kits/zork-like/ecs/zlike-ecs'
+import { SemanticCacheSystem } from '@/world-kits/zork-like/ecs/systems/semantic-cache/semantic-cache.system'
+import { ZLIKE_SYSTEM_COMPONENTS } from '@/world-kits/zork-like/ecs/zlike-ecs.types'
 
 declare global {
   interface AllegoryCustomComponentSchema {
@@ -13,7 +13,8 @@ declare global {
     }
     stats: {
       strength: number
-      defense: number
+      intelligence: number
+      dexterity: number
     }
     color: {
       name: string
@@ -37,7 +38,7 @@ function makeECS() {
   return new ECS(logger)
 }
 
-function makeSystem(ecs: ECS, options?: { vectorize?: (text: string) => Float32Array }) {
+function makeSystem(ecs: ECS, options?: { vectorize?: (text: string) => Promise<Float32Array> }) {
   const logger = new DefaultLogger({
     channelOpts: {
       info: false,
@@ -47,7 +48,7 @@ function makeSystem(ecs: ECS, options?: { vectorize?: (text: string) => Float32A
       silly: false,
     },
   })
-  const vectorize = options?.vectorize ?? ((text: string) => new Float32Array([text.length]))
+  const vectorize = options?.vectorize ?? ((text: string) => Promise.resolve(new Float32Array([text.length])))
   return new SemanticCacheSystem({
     ecs,
     vectorize,
@@ -210,7 +211,8 @@ describe('SemanticCacheSystem - resolver registration', () => {
     })
     ecs.setComponentOnEntity(entity, 'stats', {
       strength: 15,
-      defense: 10,
+      dexterity: 10,
+      intelligence: 12
     })
 
     system.registerResolver('damage', (d) => [`hp: ${d.health}`])
@@ -265,7 +267,7 @@ describe('SemanticCacheSystem - cache building and chunking', () => {
   test('builds semantic cache with chunks only', async () => {
     const ecs = makeECS()
     ecs.registerComponent('damage')
-    const vectorizeMock = mock((text: string) => new Float32Array([text.length, 99]))
+    const vectorizeMock = mock((text: string) => Promise.resolve(new Float32Array([text.length, 99])))
     const system = makeSystem(ecs, { vectorize: vectorizeMock })
 
     const entity = ecs.createEntity('hero', 'hero')
@@ -295,7 +297,8 @@ describe('SemanticCacheSystem - cache building and chunking', () => {
     })
     ecs.setComponentOnEntity(entity, 'stats', {
       strength: 20,
-      defense: 12,
+      intelligence: 12,
+      dexterity: 8,
     })
 
     system.registerResolver('damage', (d) => [`HP: ${d.health}`])
@@ -415,7 +418,7 @@ describe('SemanticCacheSystem - noun and component requirements', () => {
     // Mock getDirtyEntitiesByComponentRevision to return a non-existent entity ID
     const originalGetDirty = ecs.getDirtyEntitiesByComponentRevision.bind(ecs)
     ecs.getDirtyEntitiesByComponentRevision = (comp, rev) => {
-      if (comp === SYSTEM_SCHEMA_COMPONENTS.noun) {
+      if (comp === ZLIKE_SYSTEM_COMPONENTS.noun) {
         return new Set([999999])
       }
       return originalGetDirty(comp, rev)
@@ -517,7 +520,7 @@ describe('SemanticCacheSystem - revisions and dirty tracking', () => {
   test('does not rebuild cache for unmodified entities on subsequent runs', async () => {
     const ecs = makeECS()
     ecs.registerComponent('damage')
-    const vectorizeMock = mock((text: string) => new Float32Array([text.length]))
+    const vectorizeMock = mock((text: string) => Promise.resolve(new Float32Array([text.length])))
     const system = makeSystem(ecs, { vectorize: vectorizeMock })
 
     const entity = ecs.createEntity('goblin', 'goblin')
@@ -541,7 +544,7 @@ describe('SemanticCacheSystem - revisions and dirty tracking', () => {
     const ecs = makeECS()
     ecs.registerComponent('damage')
     ecs.registerComponent('unrelated')
-    const vectorizeMock = mock((text: string) => new Float32Array([text.length]))
+    const vectorizeMock = mock((text: string) => Promise.resolve(new Float32Array([text.length])))
     const system = makeSystem(ecs, { vectorize: vectorizeMock })
 
     const entity = ecs.createEntity('goblin', 'goblin')
@@ -611,7 +614,8 @@ describe('SemanticCacheSystem - revisions and dirty tracking', () => {
     const entityB = ecs.createEntity('mage', 'mage')
     ecs.setComponentOnEntity(entityB, 'stats', {
       strength: 5,
-      defense: 8,
+      intelligence: 4,
+      dexterity: 22,
     })
 
     // Register both resolvers before init (both are in staleResolvers)

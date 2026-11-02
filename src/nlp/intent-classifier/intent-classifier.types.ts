@@ -2,7 +2,7 @@ import type EventBus from '@/helpers/event-bus/event-bus'
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
 import type { EngineComponentSchema } from '@/kernel/ecs/ecs.types'
-import type { SemanticResolutionSystem } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.system'
+import type { SemanticResolutionSystem } from '@/world-kits/zorklike/systems/semantic-cache/semantic-cache.system'
 
 export const ENTITY_GROUP_TARGET = 'TARGET'
 export const ENTITY_GROUP_AUX = 'AUXILIARY'

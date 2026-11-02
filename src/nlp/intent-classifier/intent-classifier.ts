@@ -18,7 +18,7 @@ import {
 } from '@/nlp/intent-classifier/intent-classifier.types'
 import type { IntentClassifierParams } from '@/nlp/intent-classifier/intent-classifier.types'
 import { splitRawCommands } from '@/nlp/language-profile/en-us/profile-en-us'
-import type { SemanticCacheData } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.types'
+import type { SemanticCacheData } from '@/world-kits/zorklike/systems/semantic-cache/semantic-cache.types'
 
 const DEFAULT_CONFIDENCE_THRESHOLD = 0.8
 const thresholdIsValid = (threshold: number | undefined) =>

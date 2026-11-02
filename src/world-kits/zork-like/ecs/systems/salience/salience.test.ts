@@ -3,9 +3,8 @@ import { describe, expect, mock, test } from 'bun:test'
 import { ENGINE_LAYER, type EngineLayer } from '@/engine/engine.types'
 import { DefaultLogger } from '@/helpers/logger/logger'
 import type { Logger } from '@/helpers/logger/logger.types'
-import ECS from '@/kernel/ecs/ecs'
-import { SYSTEM_SCHEMA_COMPONENTS } from '@/kernel/ecs/ecs.types'
-import { SalienceSystem } from '@/kernel/ecs/systems/salience/salience.system'
+import ECS from '@/world-kits/zork-like/ecs/zlike-ecs'
+import { SalienceSystem } from '@/world-kits/zork-like/ecs/systems/salience/salience.system'
 import {
   SALIENCE_CONFIDENCE,
   SALIENCE_SCORE,
@@ -13,7 +12,8 @@ import {
   type SalienceScore,
   type SalienceVote,
   type SalienceVoter,
-} from '@/kernel/ecs/systems/salience/salience.types'
+} from '@/world-kits/zork-like/ecs/systems/salience/salience.types'
+import { ZLIKE_SYSTEM_COMPONENTS } from '@/world-kits/zork-like/ecs/zlike-ecs.types'
 
 function makeLogger(): Logger {
   return new DefaultLogger({
@@ -638,7 +638,7 @@ describe('SalienceSystem - entity eligibility and stale cleanup', () => {
     await system.init()
     expect(ecs.entityHasComponent(entity, 'SalienceCache')).toBe(true)
 
-    ecs.removeComponentFromEntity(entity, SYSTEM_SCHEMA_COMPONENTS.noun)
+    ecs.removeComponentFromEntity(entity, ZLIKE_SYSTEM_COMPONENTS.noun)
     await system.run()
 
     expect(ecs.entityHasComponent(entity, 'SalienceCache')).toBe(false)

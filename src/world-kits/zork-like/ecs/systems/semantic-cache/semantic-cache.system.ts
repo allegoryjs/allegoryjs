@@ -1,18 +1,18 @@
 import type { Logger } from '@/helpers/logger/logger.types'
 import type ECS from '@/kernel/ecs/ecs'
 import {
-  SYSTEM_SCHEMA_COMPONENTS,
   type Entity,
   InitializableSystem,
   type ComponentName,
   type Revision,
 } from '@/kernel/ecs/ecs.types'
+import { ZLIKE_SYSTEM_COMPONENTS } from '@/world-kits/zork-like/ecs/zlike-ecs.types'
 import type {
   ComponentResolver,
   ComponentResolverMap,
   SemanticCacheConfig,
   SemanticCacheData,
-} from '@/kernel/ecs/systems/semantic-cache/semantic-cache.types'
+} from '@/world-kits/zork-like/ecs/systems/semantic-cache/semantic-cache.types'
 
 /**
  * The semantic resolution system connects entities in the ECS to the NLP pipeline.
@@ -63,7 +63,7 @@ export class SemanticCacheSystem extends InitializableSystem {
   #lastSeenRevision: Revision
   #resolvers: ComponentResolverMap
   #staleResolvers: Set<ComponentName>
-  #vectorize: (text: string) => Float32Array
+  #vectorize: (text: string) => Promise<Float32Array>
 
   protected logger: Logger
 
@@ -87,14 +87,14 @@ export class SemanticCacheSystem extends InitializableSystem {
     const dirtyEntities = new Set<Entity>()
 
     for (const entity of this.#ecs.getDirtyEntitiesByComponentRevision(
-      SYSTEM_SCHEMA_COMPONENTS.semanticCache,
+      ZLIKE_SYSTEM_COMPONENTS.semanticCache,
       this.#lastSeenRevision,
     )) {
       dirtyEntities.add(entity)
     }
 
     for (const entity of this.#ecs.getDirtyEntitiesByComponentRevision(
-      SYSTEM_SCHEMA_COMPONENTS.noun,
+      ZLIKE_SYSTEM_COMPONENTS.noun,
       this.#lastSeenRevision,
     )) {
       dirtyEntities.add(entity)
@@ -117,9 +117,7 @@ export class SemanticCacheSystem extends InitializableSystem {
       }
     }
 
-    for (const entity of dirtyEntities) {
-      this.#buildCacheForEntity(entity)
-    }
+    await Promise.all([...dirtyEntities].map(entity => this.#buildCacheForEntity(entity)))
 
     this.#lastSeenRevision = this.#ecs.currentRevision
     this.#staleResolvers.clear()
@@ -136,7 +134,7 @@ export class SemanticCacheSystem extends InitializableSystem {
       this.#staleResolvers.add(componentWithResolver)
     }
 
-    this.#ecs.registerComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache, { serialize: false })
+    this.#ecs.registerComponent(ZLIKE_SYSTEM_COMPONENTS.semanticCache, { serialize: false })
     this.initialized = true
     await this.onRun()
     this.logger.info('Semantic Cache System initialized')
@@ -147,7 +145,7 @@ export class SemanticCacheSystem extends InitializableSystem {
       this.logger.errorAndThrow(`Cannot dispose of ${this.name} system; system not initialized`)
     }
 
-    this.#ecs.deregisterComponent(SYSTEM_SCHEMA_COMPONENTS.semanticCache)
+    this.#ecs.deregisterComponent(ZLIKE_SYSTEM_COMPONENTS.semanticCache)
     this.initialized = false
 
     this.logger.info('Semantic Cache System disposed; cache component removed from all entities')
@@ -183,14 +181,14 @@ export class SemanticCacheSystem extends InitializableSystem {
     )
   }
 
-  #buildCacheForEntity(entity: Entity) {
+  async #buildCacheForEntity(entity: Entity) {
     if (!this.#ecs.entityExists(entity)) {
       const err = `Attempted to build semantic cache for entity ${entity}, but no such entity exists`
       this.logger.errorAndThrow(err)
     }
 
-    const entityNoun = this.#ecs.entityHasComponent(entity, SYSTEM_SCHEMA_COMPONENTS.noun)
-      ? this.#ecs.getEntityComponentData(entity, SYSTEM_SCHEMA_COMPONENTS.noun)?.noun
+    const entityNoun = this.#ecs.entityHasComponent(entity, ZLIKE_SYSTEM_COMPONENTS.noun)
+      ? this.#ecs.getEntityComponentData(entity, ZLIKE_SYSTEM_COMPONENTS.noun)?.noun
       : undefined
 
     if (!entityNoun) {
@@ -201,8 +199,8 @@ export class SemanticCacheSystem extends InitializableSystem {
       `.trim(),
       )
 
-      if (this.#ecs.entityHasComponent(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)) {
-        this.#ecs.removeComponentFromEntity(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
+      if (this.#ecs.entityHasComponent(entity, ZLIKE_SYSTEM_COMPONENTS.semanticCache)) {
+        this.#ecs.removeComponentFromEntity(entity, ZLIKE_SYSTEM_COMPONENTS.semanticCache)
       }
       return
     }
@@ -227,20 +225,38 @@ export class SemanticCacheSystem extends InitializableSystem {
       `.trim(),
       )
 
-      if (this.#ecs.entityHasComponent(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)) {
-        this.#ecs.removeComponentFromEntity(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache)
+      if (this.#ecs.entityHasComponent(entity, ZLIKE_SYSTEM_COMPONENTS.semanticCache)) {
+        this.#ecs.removeComponentFromEntity(entity, ZLIKE_SYSTEM_COMPONENTS.semanticCache)
       }
 
       return
     }
 
-    const chunks = Array.from(componentDescriptors.values()).flatMap(descriptors =>
-      descriptors.map(descriptor => [descriptor, this.#vectorize(descriptor)] as [string, Float32Array])
+    const descriptors = Array.from(componentDescriptors.values()).flat()
+
+    const results = await Promise.allSettled(
+      descriptors.map(descriptor => this.#vectorize(descriptor)),
     )
 
+    const failedDescriptors = results.flatMap((result, index) =>
+      result.status === 'rejected' ? [descriptors[index]!] : [],
+    )
+
+    if (failedDescriptors.length) {
+      this.logger.silly`Rejected vectorization promises in Semantic Cache System for entity ${entity} for the following descriptors: ${failedDescriptors}`
+      this.logger.errorAndThrow(
+        `Error while vectorizing descriptors for entity ${entity}; ${failedDescriptors.length} vectorizations failed`,
+      )
+    }
+
+    const chunks = results.flatMap((result, index) =>
+      result.status === 'fulfilled'
+        ? [[descriptors[index]!, result.value] as [string, Float32Array]]
+        : [],
+    )
     const cacheEntry: SemanticCacheData = { chunks }
 
-    this.#ecs.setComponentOnEntity(entity, SYSTEM_SCHEMA_COMPONENTS.semanticCache, cacheEntry)
+    this.#ecs.setComponentOnEntity(entity, ZLIKE_SYSTEM_COMPONENTS.semanticCache, cacheEntry)
 
     this.logger.debug(`Built semantic cache for entity ${entity}`)
     this.logger.silly`Semantic cache for entity ${entity}: ${cacheEntry}`

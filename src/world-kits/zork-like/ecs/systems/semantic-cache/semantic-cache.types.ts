@@ -15,7 +15,7 @@ export interface ComponentResolverMap extends Omit<Map<ComponentName, any>, 'get
 export interface SemanticCacheConfig {
   ecs: ECS
   logger: Logger
-  vectorize: (text: string) => Float32Array
+  vectorize: (text: string) => Promise<Float32Array>
 }
 
 export type DescriptorCacheChunks = string[];

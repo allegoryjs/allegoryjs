@@ -1,6 +1,4 @@
 import type { Logger } from '@/helpers/logger/logger.types'
-import type { SalienceCacheData } from '@/kernel/ecs/systems/salience/salience.types'
-import type { SemanticCacheData } from '@/kernel/ecs/systems/semantic-cache/semantic-cache.types'
 
 declare global {
   interface AllegoryCustomComponentSchema {}
@@ -36,7 +34,7 @@ export abstract class ECS {
 
   abstract deregisterComponent(name: ComponentName): void
 
-  abstract createEntity(metaId?: string, noun?: string): void
+  abstract createEntity(metaId?: string): void
 
   abstract registerSystem(system: System): void
 
@@ -63,7 +61,7 @@ export abstract class ECS {
     [Component in ComponentName]: ActiveComponentSchema[Component]
   }>
 
-  abstract getEntityComponentData<Component extends MandatoryComponent>(
+  abstract getEntityComponentData<Component extends SystemComponent>(
     entity: Entity,
     name: Component,
   ): ActiveComponentSchema[Component]
@@ -99,17 +97,9 @@ export abstract class ECS {
 export const SYSTEM_SCHEMA_COMPONENTS = {
   tags: 'Tags',
   meta: 'Meta',
-  noun: 'Noun',
-  semanticCache: 'SemanticCache',
-  salienceCache: 'SalienceCache',
 } as const
 
-export const MANDATORY_COMPONENTS = [
-  SYSTEM_SCHEMA_COMPONENTS.tags,
-  SYSTEM_SCHEMA_COMPONENTS.meta,
-] as const
-
-export type MandatoryComponent = (typeof MANDATORY_COMPONENTS)[number]
+export type SystemComponent = (typeof SYSTEM_SCHEMA_COMPONENTS)['tags'|'meta']
 
 /**
  * In order to have the best type-safe development experience, declare the shape of
@@ -150,16 +140,6 @@ export interface EngineComponentSchema {
     // not used for any game logic; mostly just for debugging
     id: string
   }
-
-  // only entities which the player can interact via input/command should have this component.
-  // this component is used in the NLP pipeline to identify which entity(s) the user may be referring to in their command input
-  Noun: {
-    noun: string // the main noun word/concept associated with the entity, e.g. "sword" or "potion bottle"
-  }
-
-  SemanticCache: SemanticCacheData
-
-  SalienceCache: SalienceCacheData
 }
 
 export type ActiveComponentSchema = EngineComponentSchema & CustomComponentSchema
@@ -181,7 +161,7 @@ export interface EcsReadonlyFacade {
   getEntityByPrettyId(prettyId: string): Entity | undefined
   getComponentsOnEntity(entity: Entity): Set<ComponentName>
   getEntitiesByComponents(...componentTypes: ComponentName[]): Set<Entity>
-  getEntityComponentData<Component extends MandatoryComponent>(
+  getEntityComponentData<Component extends SystemComponent>(
     entity: Entity,
     name: Component,
   ): ActiveComponentSchema[Component]
